@@ -47,4 +47,4 @@ pip install -e "python/ocrowley_memory" -e "python/ocrowley_agents" -e "python/o
 pytest python/tests -q
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/EXTRACTION_MAP.md](docs/EXTRACTION_MAP.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/EXTRACTION_MAP.md](docs/EXTRACTION_MAP.md), and [docs/PUBLISH.md](docs/PUBLISH.md).
