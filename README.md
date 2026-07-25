@@ -24,6 +24,8 @@ Shared library foundation extracted from the ocrowleymatt-stack repositories.
 | `@ocrowley/audit` | Hash-chained tamper-evident ledger (Mn) |
 | `@ocrowley/coherence` | Narrative psych/craft/accuracy libraries |
 | `@ocrowley/literary-rules` | Literary engine standing rules |
+| `@ocrowley/osint` | Entity/dossier/scan contracts, stylometry, geo cluster, archive, OSINT policy |
+| `@ocrowley/darkweb` | Clearnet Tor-index (Ahmia) + breach adapters with authorization gates |
 
 ## Packages (Python)
 
@@ -38,6 +40,7 @@ Shared library foundation extracted from the ocrowleymatt-stack repositories.
 | `ocrowley_contracts` | Protocols for builder/tester/aegis/iris/reviewer |
 | `ocrowley_identity` | Deterministic identity normalisation |
 | `ocrowley_search` | Plan-then-execute personal search heuristics |
+| `ocrowley_osint` | OSINT module registry + Ahmia parse helpers |
 
 ## Quick start
 
@@ -49,7 +52,8 @@ npm test
 
 # Python
 pip install -e "python/ocrowley_memory" -e "python/ocrowley_agents" -e "python/ocrowley_policy" \
-  -e "python/ocrowley_planner" -e "python/ocrowley_operator" -e "python/ocrowley_audit" -e "python/ocrowley_contracts"
+  -e "python/ocrowley_planner" -e "python/ocrowley_operator" -e "python/ocrowley_audit" -e "python/ocrowley_contracts" \
+  -e "python/ocrowley_identity" -e "python/ocrowley_search" -e "python/ocrowley_osint"
 pytest python/tests -q
 ```
 

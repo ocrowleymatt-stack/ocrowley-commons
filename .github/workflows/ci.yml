@@ -33,5 +33,6 @@ jobs:
             -e python/ocrowley_operator -e python/ocrowley_audit \
             -e python/ocrowley_contracts \
             -e python/ocrowley_identity \
-            -e python/ocrowley_search
+            -e python/ocrowley_search \
+            -e python/ocrowley_osint
       - run: pytest python/tests -q

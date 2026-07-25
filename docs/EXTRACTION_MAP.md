@@ -21,6 +21,8 @@ from the stack catalogue.
 | `@ocrowley/privacy-kit` | 14 / 18 | craigs-navigator `shareEngine`, `reasoningEngine`, `notificationEngine`, `calmLibrary`, enhancement limits | Consent / evidence-first |
 | `@ocrowley/ops` | 17 | Caspa `main` `doctorService` (portable subset) + `scripts/deploy-smoke.sh` | No secrets in reports |
 | `@ocrowley/literary-rules` | — | Caspa/Shakespeare identical `AGENTS.md` | Standing literary policy |
+| `@ocrowley/osint` | 8 | spiderfoot-ui `shared/{dossier,types}.ts`, `server/routers/osint.ts` (probe list), `server/spiderfoot.ts` target norm; nexus-backend `intelligenceService` JS dedup, `personaService` metrics, `deceptionService` patterns, `geospatialService` cluster, `webArchiveService` CDX; Hook `basicHooks` OSINT brief prompts | No CLI shell-outs; policy default-deny |
+| `@ocrowley/darkweb` | 9 | nexus-backend `darkWebService.js`; spiderfoot-ui `routers/darkWebSearch.ts` | Clearnet Ahmia index + HIBP/DeHashed/IntelX adapters; secrets via env only |
 
 ## Python packages
 
@@ -33,18 +35,20 @@ from the stack catalogue.
 | `ocrowley_operator` | 13 | Life-os `daedalus/digsbody/*` (policy re-exported from `ocrowley_policy`) | Execute disabled by design |
 | `ocrowley_audit` | — | Life-os `daedalus/reporter/*` | Decision logs / reports |
 | `ocrowley_contracts` | — | Life-os builder/tester/aegis/iris/reviewer as **Protocols** + `stubs/` | Mocks not default behavior |
+| `ocrowley_osint` | 8 | TheBigBrother module-layout inspiration; spiderfoot scan types; Ahmia parse mirrored from TS | Registry only — does **not** vendor TheBigBrother scanners |
 
 ## Explicitly not extracted
 
 | Asset | Reason |
 |-------|--------|
-| TheBigBrother | Unmodified fork of `chadi0x/TheBigBrother` (Sherlock-derived OSINT) |
+| TheBigBrother scanner modules | Upstream fork of `chadi0x/TheBigBrother`; registry pattern extracted instead of vendoring engines |
 | handsy-ios CallRecorder / SMS stubs | Aspirational; legal/App Store risk |
 | handy-ios | Empty repo |
 | Nested `Caspa/Caspa`, `Shakespeare-/Shakespeare` | Outdated AI Studio dumps |
 | Phase-6 show-theatre modules | Optional future package |
 | Always-pass mock agents as library behavior | Protocols/stubs only |
 | Cursor commission/doctor branches | Already merged to Caspa `main` |
+| maigret/sherlock/holehe CLI runners | Stay app-local in spiderfoot-ui; commons exposes HTTP probe registry only |
 
 ## Branch coverage
 
@@ -54,7 +58,9 @@ from the stack catalogue.
 | Shakespeare- | `main`, `fix/local-first-persistence` |
 | Life-os | `main` (superset of all feature branches) |
 | craigs-navigator | `main` |
-| handsy-ios / handy-ios / TheBigBrother | Inspected; excluded from extraction |
+| handsy-ios / handy-ios | Inspected; intercept stubs excluded |
+| TheBigBrother | Inspected; module registry inspiration only (no scanner vendoring) |
+| nexus-backend / spiderfoot-ui / Hook | OSINT + dark-web layers extracted (keys scrubbed) |
 
 ## Usefulness ranking (top 20)
 
@@ -82,26 +88,27 @@ from the stack catalogue.
 
 ## Private repository catalogue (post-auth)
 
-Inspected after GitHub login. High-value extractions landed in this release; OSINT/surveillance stacks excluded.
+Inspected after GitHub login. Literary cores landed first; OSINT/dark-web layers added in a follow-up extraction.
 
 | Private repo | Verdict | Extracted into commons |
 |--------------|---------|------------------------|
 | **novel-machine** | Top literary source | `@ocrowley/coherence` (psych/craft/accuracy libs), `@ocrowley/crypto`, polish passes in `@ocrowley/quality`, Brave search adapter in `@ocrowley/research` |
 | **Mn-Infrustructure** | Platform kernel | `@ocrowley/policy`, `@ocrowley/audit` (tamper ledger) |
 | **Life** | Personal OS (daedalus = Life-os dup) | `ocrowley_identity`, `ocrowley_search` planner heuristics |
-| **Hook** | Search/evidence product | Evidence guardrails → `@ocrowley/privacy-kit` |
-| **nexus-backend** | Mixed; dark-web excluded | Pure `groundEntity` → `@ocrowley/research` |
+| **Hook** | Search/evidence product | Evidence guardrails → `@ocrowley/privacy-kit`; OSINT brief prompts → `@ocrowley/osint` |
+| **nexus-backend** | Intel backend | `groundEntity` → `@ocrowley/research`; dark-web/persona/deception/geoint/archive → `@ocrowley/osint` + `@ocrowley/darkweb` |
+| **spiderfoot-ui** | OSINT product shell | Dossier/scan types, username probe list, Ahmia/HIBP/IntelX adapters → `@ocrowley/osint` + `@ocrowley/darkweb` |
 | **anon-kb-app** | Local KB + vault | Documented; Fernet vault deferred (cryptography dep) |
 | **mnemosyne-demo** | Demo/Atlas-hardcoded | Capability registry pattern documented only |
 | **Nexus / NexusPlexus / subatomic** | UI / stubs | Graph/search ideas noted; importers stay app-local |
 | **Echo-clip-engine** | OpenManus nest | Themis/safety noted; prefer Life-os policy already extracted |
 | **caspa-2026** | Empty stub | None |
-| **ocrowley-evidence-portal / evidence-corpus / password-recovery / flipper / spiderfoot / *-ios wrappers** | Product/domain or scaffolds | Not extracted (domain-specific or low reusable core) |
+| **ocrowley-evidence-portal / evidence-corpus / password-recovery / flipper / *-ios wrappers** | Product/domain or scaffolds | Not extracted (domain-specific or low reusable core) |
 
-### Explicit private exclusions
+### Explicit private exclusions (still)
 
-- nexus-backend `darkWebService` and deception/persona/geoint stacks
-- Hook OSINT analyst prompts
+- TheBigBrother upstream scanner engines (registry only)
+- spiderfoot-ui maigret/sherlock/holehe CLI shell-outs
 - anon-kb covert launcher / SSH-VM remote exec
 - Nexus takeout/browser history importers as default library code
 - Hardcoded API keys found in nexus-backend (scrubbed; never vendored)
@@ -115,3 +122,5 @@ Inspected after GitHub login. High-value extractions landed in this release; OSI
 | High | Life identity normalisation + search planner |
 | Medium-High | Evidence grounding + evidence guardrails |
 | Medium | AES-GCM crypto helpers |
+| High | OSINT dossier/scan + stylometry/deception/geo/archive (`@ocrowley/osint`) |
+| High | Dark-web clearnet index + breach adapters (`@ocrowley/darkweb`, `ocrowley_osint`) |

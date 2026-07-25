@@ -302,6 +302,22 @@ Everything else (gateways, queues, vectors, PII, OTel, CRDTs) should trend towar
 
 ---
 
+## OSINT / dark-web complements (`@ocrowley/osint`, `@ocrowley/darkweb`)
+
+| Project | Notes | Strategy |
+|---|---|---|
+| [SpiderFoot](https://github.com/smicallef/spiderfoot) | Full OSINT automation platform | Host/runtime; commons keeps dossier/scan contracts + API helpers |
+| [Sherlock](https://github.com/sherlock-project/sherlock) / [Maigret](https://github.com/soxoj/maigret) / [Holehe](https://github.com/megadose/holehe) | Username/email presence CLIs | App-local runners; commons HTTP probe registry only |
+| [Ahmia](https://ahmia.fi/) | Public Tor search **index** (clearnet) | Wrap parser in `@ocrowley/darkweb` |
+| [Have I Been Pwned](https://haveibeenpwned.com/) / DeHashed / Intelligence X | Breach / leak indexes | Adapter interfaces; keys via env |
+| [Wayback CDX](https://github.com/internetarchive/wayback) / Common Crawl | Web archive recovery | `@ocrowley/osint` archive helpers |
+| Nominatim / geo stacks | Geocoding for heatmaps | Inject `GeocodeFn`; cluster locally |
+| OPA / Cedar | AuthZ for investigate mode | Already hybrid via `@ocrowley/policy` |
+
+**Keep proprietary:** case authorization model, evidential language in OSINT briefs, nexus risk banding, lawful-use gates.
+
+---
+
 ## Related docs
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — package layout and boundaries  
