@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "cursor/**"]
+  pull_request:
+
+jobs:
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm install
+      - run: npm run build
+      - run: npm test
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install packages
+        run: |
+          python -m pip install -U pip pytest
+          pip install -e python/ocrowley_memory -e python/ocrowley_policy \
+            -e python/ocrowley_agents -e python/ocrowley_planner \
+            -e python/ocrowley_operator -e python/ocrowley_audit \
+            -e python/ocrowley_contracts
+      - run: pytest python/tests -q

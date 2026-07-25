@@ -1,0 +1,1 @@
+# ocrowley_contracts\n\nProtocols for builder/tester/aegis/iris/reviewer agents\n

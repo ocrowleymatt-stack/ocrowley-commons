@@ -1,0 +1,7 @@
+{
+  "number": 1,
+  "title": "Add GitHub issue reader for Daedalus planner",
+  "body": "## Description\nCreate a module to ingest GitHub issues and extract task directives for Daedalus.\n\n## Acceptance criteria\n- Parse GitHub issue JSON correctly\n- Extract risk keywords (auth, deploy, secrets, etc.)\n- Classify risk level (GREEN/YELLOW/ORANGE/CRITICAL)\n- Detect no-go areas\n- Handle malformed input gracefully\n\n## Affected modules\n- planner\n- aegis\n\n## Constraints\n- Test-only (no production changes)\n- Must pass security scan\n- Coverage >= 80%\n",
+  "labels": ["feature", "planner"],
+  "state": "open"
+}

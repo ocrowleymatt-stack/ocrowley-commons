@@ -1,0 +1,31 @@
+{
+  "name": "@ocrowley/privacy-kit",
+  "version": "0.1.0",
+  "description": "Share sensitivity taxonomy and evidence-first companion contracts",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "@types/node": "^22.14.0"
+  },
+  "license": "MIT"
+}

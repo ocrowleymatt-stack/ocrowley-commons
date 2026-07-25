@@ -1,0 +1,11 @@
+[project]
+name = "ocrowley-commons"
+version = "0.1.0"
+description = "Shared Python agent-OS packages for ocrowleymatt-stack"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]
+python_files = ["test_*.py"]
+addopts = "-q --tb=short"

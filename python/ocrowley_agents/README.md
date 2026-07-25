@@ -1,0 +1,1 @@
+# ocrowley_agents\n\nMnemosyne multi-agent registry, dispatcher, coordinator\n

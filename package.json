@@ -1,0 +1,25 @@
+{
+  "name": "ocrowley-commons",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Shared library foundation for ocrowleymatt-stack",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test:ai-client": "npm run test -w @ocrowley/ai-client",
+    "test:intent": "npm run test -w @ocrowley/intent"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "~5.8.2",
+    "tsx": "^4.21.0",
+    "@types/node": "^22.14.0"
+  }
+}

@@ -1,0 +1,1 @@
+# ocrowley_planner\n\nIssue → plan heuristics (scope, deps, risk)\n

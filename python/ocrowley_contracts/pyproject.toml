@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ocrowley_contracts"
+version = "0.1.0"
+description = "Protocols for builder/tester/aegis/iris/reviewer agents"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ocrowley_contracts*"]
