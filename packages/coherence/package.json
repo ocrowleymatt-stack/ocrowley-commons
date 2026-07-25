@@ -1,0 +1,25 @@
+{
+  "name": "@ocrowley/coherence",
+  "version": "0.1.0",
+  "description": "Narrative coherence libraries (psychology/craft/accuracy) from novel-machine",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "@types/node": "^22.14.0"
+  },
+  "license": "MIT"
+}

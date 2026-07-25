@@ -78,3 +78,40 @@ from the stack catalogue.
 18. Local acoustic enhancement limits (privacy honesty)  
 19. Prize/content intelligence — *deferred* (still in Caspa app)  
 20. Show-production / Phase-6 — *deferred*
+
+
+## Private repository catalogue (post-auth)
+
+Inspected after GitHub login. High-value extractions landed in this release; OSINT/surveillance stacks excluded.
+
+| Private repo | Verdict | Extracted into commons |
+|--------------|---------|------------------------|
+| **novel-machine** | Top literary source | `@ocrowley/coherence` (psych/craft/accuracy libs), `@ocrowley/crypto`, polish passes in `@ocrowley/quality`, Brave search adapter in `@ocrowley/research` |
+| **Mn-Infrustructure** | Platform kernel | `@ocrowley/policy`, `@ocrowley/audit` (tamper ledger) |
+| **Life** | Personal OS (daedalus = Life-os dup) | `ocrowley_identity`, `ocrowley_search` planner heuristics |
+| **Hook** | Search/evidence product | Evidence guardrails → `@ocrowley/privacy-kit` |
+| **nexus-backend** | Mixed; dark-web excluded | Pure `groundEntity` → `@ocrowley/research` |
+| **anon-kb-app** | Local KB + vault | Documented; Fernet vault deferred (cryptography dep) |
+| **mnemosyne-demo** | Demo/Atlas-hardcoded | Capability registry pattern documented only |
+| **Nexus / NexusPlexus / subatomic** | UI / stubs | Graph/search ideas noted; importers stay app-local |
+| **Echo-clip-engine** | OpenManus nest | Themis/safety noted; prefer Life-os policy already extracted |
+| **caspa-2026** | Empty stub | None |
+| **ocrowley-evidence-portal / evidence-corpus / password-recovery / flipper / spiderfoot / *-ios wrappers** | Product/domain or scaffolds | Not extracted (domain-specific or low reusable core) |
+
+### Explicit private exclusions
+
+- nexus-backend `darkWebService` and deception/persona/geoint stacks
+- Hook OSINT analyst prompts
+- anon-kb covert launcher / SSH-VM remote exec
+- Nexus takeout/browser history importers as default library code
+- Hardcoded API keys found in nexus-backend (scrubbed; never vendored)
+
+### Updated usefulness adds (private)
+
+| Rank bump | Asset |
+|----------:|-------|
+| Critical | novel-machine coherence libraries + polish pass prompts |
+| High | Mn policy-engine + tamper-audit |
+| High | Life identity normalisation + search planner |
+| Medium-High | Evidence grounding + evidence guardrails |
+| Medium | AES-GCM crypto helpers |

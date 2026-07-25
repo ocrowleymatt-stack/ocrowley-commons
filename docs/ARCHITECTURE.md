@@ -43,6 +43,10 @@ flowchart LR
   story["@ocrowley/story-memory"]
   privacy["@ocrowley/privacy-kit"]
   ops["@ocrowley/ops"]
+  crypto["@ocrowley/crypto"]
+  policyTs["@ocrowley/policy"]
+  auditTs["@ocrowley/audit"]
+  coherence["@ocrowley/coherence"]
   rules["@ocrowley/literary-rules"]
 
   prompts --> aiClient

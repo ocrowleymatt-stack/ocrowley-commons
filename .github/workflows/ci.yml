@@ -31,5 +31,7 @@ jobs:
           pip install -e python/ocrowley_memory -e python/ocrowley_policy \
             -e python/ocrowley_agents -e python/ocrowley_planner \
             -e python/ocrowley_operator -e python/ocrowley_audit \
-            -e python/ocrowley_contracts
+            -e python/ocrowley_contracts \
+            -e python/ocrowley_identity \
+            -e python/ocrowley_search
       - run: pytest python/tests -q

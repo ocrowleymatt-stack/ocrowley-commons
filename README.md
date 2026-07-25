@@ -19,6 +19,10 @@ Shared library foundation extracted from the ocrowleymatt-stack repositories.
 | `@ocrowley/workflow` | Guided next-step + minimal author path |
 | `@ocrowley/privacy-kit` | Share sensitivity + evidence-first companion |
 | `@ocrowley/ops` | Doctor/diagnostics helpers |
+| `@ocrowley/crypto` | AES-256-GCM + HMAC helpers |
+| `@ocrowley/policy` | Allow/deny policy engine (Mn) |
+| `@ocrowley/audit` | Hash-chained tamper-evident ledger (Mn) |
+| `@ocrowley/coherence` | Narrative psych/craft/accuracy libraries |
 | `@ocrowley/literary-rules` | Literary engine standing rules |
 
 ## Packages (Python)
@@ -32,6 +36,8 @@ Shared library foundation extracted from the ocrowleymatt-stack repositories.
 | `ocrowley_operator` | Digsbody draft/review operator |
 | `ocrowley_audit` | Decision logs + agent reports |
 | `ocrowley_contracts` | Protocols for builder/tester/aegis/iris/reviewer |
+| `ocrowley_identity` | Deterministic identity normalisation |
+| `ocrowley_search` | Plan-then-execute personal search heuristics |
 
 ## Quick start
 
