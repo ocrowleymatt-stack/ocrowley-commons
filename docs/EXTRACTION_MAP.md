@@ -21,7 +21,7 @@ from the stack catalogue.
 | `@ocrowley/privacy-kit` | 14 / 18 | craigs-navigator `shareEngine`, `reasoningEngine`, `notificationEngine`, `calmLibrary`, enhancement limits | Consent / evidence-first |
 | `@ocrowley/ops` | 17 | Caspa `main` `doctorService` (portable subset) + `scripts/deploy-smoke.sh` | No secrets in reports |
 | `@ocrowley/literary-rules` | — | Caspa/Shakespeare identical `AGENTS.md` | Standing literary policy |
-| `@ocrowley/osint` | 8 | spiderfoot-ui `shared/{dossier,types}.ts`, `server/routers/osint.ts` (probe list), `server/spiderfoot.ts` target norm; nexus-backend `intelligenceService` JS dedup, `personaService` metrics, `deceptionService` patterns, `geospatialService` cluster, `webArchiveService` CDX; Hook `basicHooks` OSINT brief prompts | No CLI shell-outs; policy default-deny |
+| `@ocrowley/osint` | 8 | spiderfoot-ui `shared/{dossier,types}.ts`, `server/routers/osint.ts` (probe list), `server/spiderfoot.ts` target norm, **`refinementLoop.ts`**; nexus-backend `intelligenceService` JS dedup, `personaService` metrics, `deceptionService` patterns, `geospatialService` cluster, `webArchiveService` CDX; Hook `basicHooks` OSINT brief prompts | Recursive discover+critique engine; no CLI shell-outs; policy default-deny |
 | `@ocrowley/darkweb` | 9 | nexus-backend `darkWebService.js`; spiderfoot-ui `routers/darkWebSearch.ts` | Clearnet Ahmia index + HIBP/DeHashed/IntelX adapters; secrets via env only |
 
 ## Python packages

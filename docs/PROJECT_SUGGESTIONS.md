@@ -78,15 +78,15 @@ medical claims; prefer net £ and Matthew-minutes returned over feature count.
 
 ---
 
-### P4. Passive Entity Dossier *(productised service / thin SaaS)*
+### P4. Recursive OSINT Engine / Passive Entity Dossier *(productised service / thin SaaS)*
 
 | | |
 |--|--|
 | **Buyer** | Due-diligence, journalists, corporate security (lawful use) |
-| **Problem** | Username/OSINT tools dump noise without case authorisation or evidential language |
-| **Result** | Authorised passive dossier: entity card, platform hits, archive hits, optional breach index (HIBP), OSINT brief with unclassified leads disclaimer |
-| **Assets** | `@ocrowley/osint`, `@ocrowley/darkweb`, spiderfoot-ui as optional sidecar, `policy` default-deny |
-| **Matthew-time** | Low–medium; policy gates do the heavy lifting |
+| **Problem** | Username/OSINT tools dump noise without case authorisation, evidential language, or iterative improvement |
+| **Result** | Authorised passive dossier via **discover→critique→enrich loops** until convergence; platform/archive/breach adapters; unclassified leads disclaimer |
+| **Assets** | `@ocrowley/osint` (`runRecursiveOsint`, refinement + critique loops), `@ocrowley/darkweb`, spiderfoot-ui sidecar, `policy` default-deny |
+| **Matthew-time** | Low–medium; policy gates + convergence caps do the heavy lifting |
 | **Price logic** | £250–£1,000 per entity; subscription for retained monitoring later |
 | **Risk** | Must stay passive-first, authorised, non-weaponised; no TheBigBrother resale |
 
