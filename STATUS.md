@@ -10,9 +10,10 @@ Last updated: 2026-07-26
 
 ## Verified this cycle
 
-- TypeScript: 51 tests passing across workspaces
-- Python: pytest suite green (datetime.utcnow deprecation warnings remain)
-- CI workflow present; `package-lock.json` present
+- TypeScript workspaces green (osint now includes full toolkit + recursive defaults)
+- Python pytest green including BigBrother registry (19 modules)
+- Full toolkit: commons + darkweb + bigbrother + spiderfoot + CLI bridges
+- `runRecursiveOsint()` uses full toolkit by default; `reportToolkitAvailability()` lists readiness
 - Docs: ARCHITECTURE, EXTRACTION_MAP, COMPLEMENTARY_OSS, PUBLISH, PROJECT_SUGGESTIONS
 
 ## Missing for Matt OS Slice 0–1

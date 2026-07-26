@@ -129,6 +129,7 @@ describe('recursive OSINT loops', () => {
     assert.ok(result.evidence.length >= 1);
     assert.equal(result.brief.classification.includes('UNCLASSIFIED'), true);
     assert.ok(result.brief.score >= 0);
+    assert.ok(result.tools.tools.length > 0);
   });
 
   it('denies recursive run without authorization', async () => {

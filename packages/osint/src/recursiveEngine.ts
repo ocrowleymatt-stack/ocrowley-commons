@@ -1,11 +1,8 @@
 /**
  * Recursive OSINT engine — discovery loop then critique/improve loop.
  *
- * Phase A (discover): expand seeds until convergence.
- * Phase B (improve): synthesise → critique → enrich until score plateaus.
- *
- * Hosts inject query/enrich adapters (platform probes, archive, darkweb, SpiderFoot).
- * Policy is enforced up front; no self-escalation of permissions.
+ * By default uses the full toolkit (platforms, archive, darkweb, bridges, CLIs).
+ * Pass discover/enrichFromCritique to override.
  */
 
 import { assertOsintAllowed, type OsintAuthorization } from './policy.js';
@@ -24,6 +21,13 @@ import {
 } from './refinementLoop.js';
 import { extractSeedsFromItems } from './seedExtract.js';
 import { EVIDENTIAL_WARNING, REPORT_CLASSIFICATION } from './types.js';
+import {
+  createFullDiscover,
+  createFullEnrich,
+  reportToolkitAvailability,
+  type ToolkitOptions,
+} from './toolkit.js';
+import type { DarkwebAuthorization } from '@ocrowley/darkweb';
 
 export interface OsintEvidenceItem {
   key: string;
@@ -38,28 +42,23 @@ export interface OsintEvidenceItem {
 export interface RecursiveOsintOptions {
   auth: OsintAuthorization;
   initialSeeds: RefinementSeed[];
-  /**
-   * One discovery sweep. Should be passive-first unless auth allows investigate.
-   * Return itemKeys stable for overlap detection.
-   */
-  discover: (seeds: RefinementSeed[], sweepNumber: number) => Promise<SweepResult<OsintEvidenceItem>>;
-  /** Optional LLM seed extractor; default uses deterministic regex extract. */
+  /** Optional override. Default: full toolkit discover. */
+  discover?: (seeds: RefinementSeed[], sweepNumber: number) => Promise<SweepResult<OsintEvidenceItem>>;
   extractSeeds?: (items: OsintEvidenceItem[], existing: RefinementSeed[]) => Promise<RefinementSeed[]>;
-  /** Optional LLM critique; default uses deterministicCritique. */
   critique?: (input: {
     round: number;
     findings: EntityFindings[];
     briefText: string;
     previousScore: number;
   }) => Promise<CritiqueReport>;
-  /**
-   * Run critique follow-ups. Default no-op (score-only improve path).
-   * Return how many new evidence items were added to the shared store.
-   */
   enrichFromCritique?: (
     report: CritiqueReport,
     ctx: { seeds: RefinementSeed[]; evidence: OsintEvidenceItem[] },
   ) => Promise<OsintEvidenceItem[]>;
+  /** Toolkit configuration when using defaults. */
+  toolkit?: Omit<ToolkitOptions, 'auth'> & { darkwebAuth?: DarkwebAuthorization };
+  /** When true (default), wire full toolkit for discover/enrich if not overridden. */
+  useFullToolkit?: boolean;
   maxDiscoverSweeps?: number;
   maxCritiqueRounds?: number;
   targetScore?: number;
@@ -77,6 +76,7 @@ export interface RecursiveOsintResult {
   evidence: OsintEvidenceItem[];
   seeds: RefinementSeed[];
   findings: EntityFindings[];
+  tools: ReturnType<typeof reportToolkitAvailability>;
   brief: {
     title: string;
     classification: string;
@@ -93,6 +93,7 @@ function toFindings(evidence: OsintEvidenceItem[], seeds: RefinementSeed[]): Ent
     if (!byEntity.has(seed.value)) byEntity.set(seed.value, []);
   }
   for (const item of evidence) {
+    if (item.entity === '*') continue;
     const list = byEntity.get(item.entity) ?? [];
     list.push(item);
     byEntity.set(item.entity, list);
@@ -130,6 +131,20 @@ function synthesiseBrief(findings: EntityFindings[], score: number, discoveryRea
 export async function runRecursiveOsint(opts: RecursiveOsintOptions): Promise<RecursiveOsintResult> {
   assertOsintAllowed('scan.passive', opts.auth);
 
+  const toolkitOpts: ToolkitOptions = {
+    auth: opts.auth,
+    ...opts.toolkit,
+  };
+  const useToolkit = opts.useFullToolkit !== false;
+  const discover =
+    opts.discover ??
+    (useToolkit
+      ? createFullDiscover(toolkitOpts)
+      : async () => ({ items: [], itemKeys: [], discoveredSeeds: [] }));
+  const enrichFromCritique =
+    opts.enrichFromCritique ?? (useToolkit ? createFullEnrich(toolkitOpts) : undefined);
+
+  const tools = reportToolkitAvailability(toolkitOpts);
   const evidenceStore: OsintEvidenceItem[] = [];
   const evidenceKeys = new Set<string>();
 
@@ -137,7 +152,7 @@ export async function runRecursiveOsint(opts: RecursiveOsintOptions): Promise<Re
     initialSeeds: opts.initialSeeds,
     maxSweeps: opts.maxDiscoverSweeps ?? 6,
     queryFn: async (seeds, sweepNumber) => {
-      const result = await opts.discover(seeds, sweepNumber);
+      const result = await discover(seeds, sweepNumber);
       for (const item of result.items) {
         if (!evidenceKeys.has(item.key)) {
           evidenceKeys.add(item.key);
@@ -177,8 +192,8 @@ export async function runRecursiveOsint(opts: RecursiveOsintOptions): Promise<Re
       return report;
     },
     enrich: async report => {
-      if (!opts.enrichFromCritique) return { newEvidenceCount: 0 };
-      const added = await opts.enrichFromCritique(report, {
+      if (!enrichFromCritique) return { newEvidenceCount: 0 };
+      const added = await enrichFromCritique(report, {
         seeds: discovery.allSeeds,
         evidence: evidenceStore,
       });
@@ -209,6 +224,7 @@ export async function runRecursiveOsint(opts: RecursiveOsintOptions): Promise<Re
     evidence: evidenceStore,
     seeds: discovery.allSeeds,
     findings,
+    tools,
     brief: {
       title: 'Recursive OSINT Lead Pack',
       classification: REPORT_CLASSIFICATION,

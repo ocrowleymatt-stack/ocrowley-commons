@@ -41,7 +41,7 @@ from the stack catalogue.
 
 | Asset | Reason |
 |-------|--------|
-| TheBigBrother scanner modules | Upstream fork of `chadi0x/TheBigBrother`; registry pattern extracted instead of vendoring engines |
+| TheBigBrother scanner source trees | Not vendored into git; **registered** via `ocrowley_osint.bigbrother` (19 modules) and TS toolkit bridges (`OCROWLEY_BIGBROTHER_BRIDGE`) when installed |
 | handsy-ios CallRecorder / SMS stubs | Aspirational; legal/App Store risk |
 | handy-ios | Empty repo |
 | Nested `Caspa/Caspa`, `Shakespeare-/Shakespeare` | Outdated AI Studio dumps |

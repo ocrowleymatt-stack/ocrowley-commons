@@ -11,5 +11,7 @@ export * from './archive.js';
 export * from './refinementLoop.js';
 export * from './seedExtract.js';
 export * from './critiqueLoop.js';
+export * from './toolCatalog.js';
+export * from './toolkit.js';
 export * from './recursiveEngine.js';
 

@@ -1,69 +1,76 @@
 # @ocrowley/osint
 
-Portable OSINT layer extracted from spiderfoot-ui, nexus-backend, and Hook.
+Portable OSINT layer with a **full toolkit** recursive engine.
 
-## Scope
-
-- Entity / dossier / scan-type contracts
-- Exact-match entity dedup + alias grouping helpers
-- Stylometry metrics + linguistic deception pattern flags
-- Geospatial clustering (coords in → clusters out)
-- Username variant builder + platform probe registry
-- OSINT brief / risk-review prompt builders
-- Lawful-use authorization gates (default deny)
-- **Recursive engine** — discovery seed expansion + critique/improve loops
-
-## Recursive OSINT
+## Quick start — all tools available by default
 
 ```ts
-import { runRecursiveOsint, probeUsernamePlatforms } from '@ocrowley/osint';
+import { runRecursiveOsint, reportToolkitAvailability } from '@ocrowley/osint';
+
+const auth = {
+  actorId: 'matt',
+  roles: ['osint-operator'],
+  authorizationRef: 'CASE-42',
+  purpose: 'authorised passive enrichment',
+};
+
+// See what is live vs bridge-ready
+console.log(reportToolkitAvailability({
+  auth,
+  darkwebAuth: {
+    ...auth,
+    lawfulUseAcknowledged: true,
+  },
+}));
 
 const result = await runRecursiveOsint({
-  auth: {
-    actorId: 'matt',
-    roles: ['osint-operator'],
-    authorizationRef: 'CASE-42',
-    purpose: 'authorised passive enrichment',
-  },
+  auth,
   initialSeeds: [{ type: 'username', value: 'example', confidence: 95, source: 'operator' }],
-  discover: async (seeds) => {
-    // Host wires probes / archive / SpiderFoot / darkweb adapters here
-    const items = [];
-    const keys = [];
-    for (const s of seeds.filter(x => x.type === 'username')) {
-      const hit = await probeUsernamePlatforms(s.value);
-      for (const f of hit.found) {
-        keys.push(f.url);
-        items.push({
-          key: f.url,
-          entity: s.value,
-          title: f.site,
-          source: 'platform-probe',
-          snippet: `reported profile url ${f.url}`,
-          url: f.url,
-          score: 70,
-        });
-      }
-    }
-    return { items, itemKeys: keys, discoveredSeeds: [] };
+  toolkit: {
+    darkwebAuth: { ...auth, lawfulUseAcknowledged: true },
+    enableDarkweb: true,
+    enableArchive: true,
+    enablePlatformProbes: true,
+    enableBridges: true,   // OCROWLEY_BIGBROTHER_BRIDGE / OCROWLEY_SPIDERFOOT_URL
+    enableCliTools: false, // set true or OCROWLEY_ENABLE_CLI_TOOLS=1 for sherlock/maigret/holehe
   },
 });
+
+console.log(result.tools);
+console.log(result.brief);
 ```
 
-### Loop phases
+## Tool families
 
-1. **Discover** (`runRefinementLoop`) — query → extract seeds → re-query until no new seeds, diminishing returns, max sweeps, or budget.
-2. **Improve** (`runCritiqueLoop`) — synthesise brief → critique gaps → enrich → rescore until target, plateau, or no new evidence.
+| Family | Examples | How enabled |
+|---|---|---|
+| **commons** | platform-probe, wayback-cdx, username-variants, seed-extract, entity-dedup | Always (in-process) |
+| **darkweb** | ahmia-index, hibp-breach, dehashed, intelx, darkweb-monitor | `darkwebAuth.lawfulUseAcknowledged` + optional API keys |
+| **bigbrother** | 19 module adapters (`bb-phantom-id`, …) | Python `the_big_brother` **or** `OCROWLEY_BIGBROTHER_BRIDGE` |
+| **spiderfoot** | spiderfoot-scan | `OCROWLEY_SPIDERFOOT_URL` |
+| **cli** | sherlock, maigret, holehe | `OCROWLEY_ENABLE_CLI_TOOLS=1` |
 
-Deterministic extractors/critiques work without an LLM. Inject LLM `extractSeeds` / `critique` for stronger recursion.
+## Python BigBrother bridge
 
-## Not included
+```bash
+pip install -e python/ocrowley_osint
+# optional: install TheBigBrother package on PYTHONPATH
+```
 
-- TheBigBrother fork modules (username enumeration engines stay app-local)
-- CLI runners that shell out to maigret/sherlock/holehe
-- Hardcoded API keys
+```python
+from ocrowley_osint import create_bigbrother_registry, run_bridge_scan, ScanRequest, ScanType
+
+reg = create_bigbrother_registry()
+reg.run(ScanRequest(target="alice", scan_type=ScanType.PASSIVE, authorization_ref="CASE-1"))
+
+run_bridge_scan({
+  "authorizationRef": "CASE-1",
+  "seeds": [{"type": "username", "value": "alice"}],
+})
+```
+
+Point `OCROWLEY_BIGBROTHER_BRIDGE` at an HTTP service that POSTs to your bridge and returns `{ items, seeds }`.
 
 ## Lawful use
 
-Intended for authorized investigative / research workflows. Callers must supply an
-`OsintAuthorization` that passes `evaluateOsintPolicy` before live probes.
+Default-deny policy. Dark-web tools require explicit lawful-use acknowledgement. Passive-first; non-passive BigBrother modules are skipped in Passive scans.

@@ -22,7 +22,8 @@
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ocrowley/policy": "0.1.0"
+    "@ocrowley/policy": "0.1.0",
+    "@ocrowley/darkweb": "0.1.0"
   },
   "devDependencies": {
     "tsx": "^4.21.0",
