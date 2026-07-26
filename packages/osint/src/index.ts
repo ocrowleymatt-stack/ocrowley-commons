@@ -15,4 +15,6 @@ export * from './toolCatalog.js';
 export * from './toolkit.js';
 export * from './recursiveEngine.js';
 export * from './spiderdashBridge.js';
+export * from './people.js';
+export * from './ukRecords.js';
 

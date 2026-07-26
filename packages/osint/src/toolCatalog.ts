@@ -65,6 +65,23 @@ export const TOOL_CATALOG: ToolSpec[] = [
     passive: true,
     runtime: 'live',
   },
+  {
+    id: 'find-person',
+    family: 'commons',
+    description: 'People-first pack: seeds, profiles, UK records links, recursive enrich',
+    seedTypes: ['person', 'name', 'email', 'username', 'phone'],
+    passive: true,
+    runtime: 'live',
+  },
+  {
+    id: 'companies-house',
+    family: 'commons',
+    description: 'UK Companies House officer search',
+    seedTypes: ['person', 'name'],
+    passive: true,
+    runtime: 'live',
+    env: ['COMPANIES_HOUSE_API_KEY'],
+  },
   // Darkweb live (gated)
   {
     id: 'ahmia-index',

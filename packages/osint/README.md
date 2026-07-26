@@ -1,8 +1,30 @@
 # @ocrowley/osint
 
-Portable OSINT layer with a **full toolkit** recursive engine.
+Portable OSINT layer with a **full toolkit** recursive engine and a **people-first** API.
 
-## Quick start — all tools available by default
+## Find a person (easiest)
+
+```ts
+import { findPerson } from '@ocrowley/osint';
+
+const pack = await findPerson(
+  { name: 'Jane Doe', employer: 'Example Ltd', location: 'Manchester' },
+  {
+    auth: {
+      actorId: 'matt',
+      roles: ['osint-operator'],
+      authorizationRef: 'CASE-42',
+      purpose: 'authorised people research',
+    },
+  },
+);
+
+// pack.profiles · pack.searchLinks · pack.emails · pack.summary.topLeads
+```
+
+Instant link pack (no live probes): `findPerson(query, { auth, linksOnly: true })`.
+
+## Quick start — full recursive toolkit
 
 ```ts
 import { runRecursiveOsint, reportToolkitAvailability } from '@ocrowley/osint';
