@@ -134,7 +134,7 @@ medical claims; prefer net £ and Matthew-minutes returned over feature count.
 | Handsy intercept / covert tooling | Excluded |
 | Generic chatbot wrapper on commons | Non-goal |
 | Self-expanding Module Foundry | Premature until 3+ vertical slices work |
-| Flipper / Marauder consumer apps | Off supreme metrics |
+| Flipper / Marauder as standalone consumer apps | Prefer SpiderDash iOS shell (`com.ocrowley.matt.spiderdash`) with BLE + commons OSINT import |
 | Password-recovery public site as core | Domain side-quest |
 
 ---
