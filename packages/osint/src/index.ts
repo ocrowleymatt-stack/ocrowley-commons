@@ -17,4 +17,6 @@ export * from './recursiveEngine.js';
 export * from './spiderdashBridge.js';
 export * from './people.js';
 export * from './ukRecords.js';
+export * from './probeBetter.js';
+export * from './who.js';
 

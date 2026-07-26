@@ -7,7 +7,8 @@
 
 import type { DarkwebAuthorization } from '@ocrowley/darkweb';
 import { buildUsernameVariants, looksLikeEmail, normalizeEntityValue } from './normalize.js';
-import { DEFAULT_USERNAME_PLATFORMS, probeUsernamePlatforms, resolvePlatformUrl } from './platforms.js';
+import { DEFAULT_USERNAME_PLATFORMS, resolvePlatformUrl } from './platforms.js';
+import { probePeopleUsernames } from './probeBetter.js';
 import { assertOsintAllowed, type OsintAuthorization } from './policy.js';
 import {
   runRecursiveOsint,
@@ -299,32 +300,13 @@ export function buildPersonSeeds(query: PersonQuery): RefinementSeed[] {
 }
 
 async function probePersonProfiles(usernames: string[], maxUsernames = 6): Promise<SocialProfile[]> {
-  const profiles: SocialProfile[] = [];
-  for (const username of usernames.slice(0, maxUsernames)) {
-    const hit = await probeUsernamePlatforms(username);
-    for (const f of hit.found) {
-      profiles.push({
-        platform: f.site,
-        url: f.url,
-        username,
-        confirmed: true,
-      });
-    }
-  }
-  // Inferred LinkedIn from first successful naming pattern
-  if (usernames[0]) {
-    const slug = usernames.find(u => u.includes('.')) || usernames[0];
-    const linkedin = `https://www.linkedin.com/in/${slug.replace(/\./g, '-')}`;
-    if (!profiles.some(p => p.platform === 'LinkedIn')) {
-      profiles.push({
-        platform: 'LinkedIn',
-        url: linkedin,
-        username: slug,
-        confirmed: false,
-      });
-    }
-  }
-  return profiles;
+  const found = await probePeopleUsernames(usernames, { maxUsernames, concurrency: 10 });
+  return found.map(f => ({
+    platform: f.site,
+    url: f.url,
+    username: f.username,
+    confirmed: true,
+  }));
 }
 
 function extractTyped(evidence: OsintEvidenceItem[], seeds: RefinementSeed[]) {

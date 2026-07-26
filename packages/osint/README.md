@@ -1,98 +1,35 @@
 # @ocrowley/osint
 
-Portable OSINT layer with a **full toolkit** recursive engine and a **people-first** API.
-
-## Find a person (easiest)
+## People — one call
 
 ```ts
-import { findPerson } from '@ocrowley/osint';
+import { who } from '@ocrowley/osint';
 
-const pack = await findPerson(
-  { name: 'Jane Doe', employer: 'Example Ltd', location: 'Manchester' },
-  {
-    auth: {
-      actorId: 'matt',
-      roles: ['osint-operator'],
-      authorizationRef: 'CASE-42',
-      purpose: 'authorised people research',
-    },
-  },
-);
-
-// pack.profiles · pack.searchLinks · pack.emails · pack.summary.topLeads
+const r = await who('Jane Doe at Acme in Manchester');
+console.log(r.text);  // printable report
+console.log(r.next);  // best URL to open now
 ```
 
-Instant link pack (no live probes): `findPerson(query, { auth, linksOnly: true })`.
+Also: `who('jane@acme.com')` · `who('@janedoe')` · `who('Jane Doe', { deep: true, case: 'CASE-42' })`
 
-## Quick start — full recursive toolkit
-
-```ts
-import { runRecursiveOsint, reportToolkitAvailability } from '@ocrowley/osint';
-
-const auth = {
-  actorId: 'matt',
-  roles: ['osint-operator'],
-  authorizationRef: 'CASE-42',
-  purpose: 'authorised passive enrichment',
-};
-
-// See what is live vs bridge-ready
-console.log(reportToolkitAvailability({
-  auth,
-  darkwebAuth: {
-    ...auth,
-    lawfulUseAcknowledged: true,
-  },
-}));
-
-const result = await runRecursiveOsint({
-  auth,
-  initialSeeds: [{ type: 'username', value: 'example', confidence: 95, source: 'operator' }],
-  toolkit: {
-    darkwebAuth: { ...auth, lawfulUseAcknowledged: true },
-    enableDarkweb: true,
-    enableArchive: true,
-    enablePlatformProbes: true,
-    enableBridges: true,   // OCROWLEY_BIGBROTHER_BRIDGE / OCROWLEY_SPIDERFOOT_URL
-    enableCliTools: false, // set true or OCROWLEY_ENABLE_CLI_TOOLS=1 for sherlock/maigret/holehe
-  },
-});
-
-console.log(result.tools);
-console.log(result.brief);
-```
-
-## Tool families
-
-| Family | Examples | How enabled |
-|---|---|---|
-| **commons** | platform-probe, wayback-cdx, username-variants, seed-extract, entity-dedup | Always (in-process) |
-| **darkweb** | ahmia-index, hibp-breach, dehashed, intelx, darkweb-monitor | `darkwebAuth.lawfulUseAcknowledged` + optional API keys |
-| **bigbrother** | 19 module adapters (`bb-phantom-id`, …) | Python `the_big_brother` **or** `OCROWLEY_BIGBROTHER_BRIDGE` |
-| **spiderfoot** | spiderfoot-scan | `OCROWLEY_SPIDERFOOT_URL` |
-| **cli** | sherlock, maigret, holehe | `OCROWLEY_ENABLE_CLI_TOOLS=1` |
-
-## Python BigBrother bridge
+CLI:
 
 ```bash
-pip install -e python/ocrowley_osint
-# optional: install TheBigBrother package on PYTHONPATH
+npm run who -w @ocrowley/osint -- "Jane Doe at Acme in Manchester"
+# or: ocrowley-who "Jane Doe" --deep
 ```
 
-```python
-from ocrowley_osint import create_bigbrother_registry, run_bridge_scan, ScanRequest, ScanType
+### What it does
 
-reg = create_bigbrother_registry()
-reg.run(ScanRequest(target="alice", scan_type=ScanType.PASSIVE, authorization_ref="CASE-1"))
+Parses name / `at` / `in` / email / `@user` from one string, then in parallel:
 
-run_bridge_scan({
-  "authorizationRef": "CASE-1",
-  "seeds": [{"type": "username", "value": "alice"}],
-})
-```
+1. Live-probes high-signal platforms (GET + soft-404)
+2. Guesses work emails from employer → Gravatar (+ HIBP if keyed)
+3. Companies House officers (if `COMPANIES_HOUSE_API_KEY`)
+4. Wayback on confirmed profiles
+5. Optional `deep: true` → Ahmia
+6. Returns `next` + ranked follow-up links
 
-Point `OCROWLEY_BIGBROTHER_BRIDGE` at an HTTP service that POSTs to your bridge and returns `{ items, seeds }`.
+Env: `OCROWLEY_OSINT_CASE`, `HIBP_API_KEY`, `COMPANIES_HOUSE_API_KEY`, `OCROWLEY_OSINT_DEEP=1`.
 
-## Lawful use
-
-Default-deny policy. Dark-web tools require explicit lawful-use acknowledgement. Passive-first; non-passive BigBrother modules are skipped in Passive scans.
+Lawful use only. Leads ≠ evidence.

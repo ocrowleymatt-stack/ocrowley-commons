@@ -16,10 +16,14 @@
     "src",
     "README.md"
   ],
+  "bin": {
+    "ocrowley-who": "./bin/who.mjs"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "node --import tsx --test test/*.test.ts",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "who": "node ./bin/who.mjs"
   },
   "dependencies": {
     "@ocrowley/policy": "0.1.0",
