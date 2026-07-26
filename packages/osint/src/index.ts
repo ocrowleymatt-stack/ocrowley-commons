@@ -14,4 +14,5 @@ export * from './critiqueLoop.js';
 export * from './toolCatalog.js';
 export * from './toolkit.js';
 export * from './recursiveEngine.js';
+export * from './spiderdashBridge.js';
 
