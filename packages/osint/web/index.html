@@ -12,10 +12,35 @@
     />
     <link rel="stylesheet" href="/app.css" />
   </head>
-  <body>
+  <body class="locked">
     <div class="atmosphere" aria-hidden="true"></div>
+
+    <main id="view-pin" class="pin-gate">
+      <p class="brand">OCROWLEY</p>
+      <h1 class="product">WHO</h1>
+      <p class="tagline">Private access. Enter PIN to continue.</p>
+      <form id="pin-form" class="pin-form" autocomplete="off">
+        <label class="sr-only" for="pin">PIN</label>
+        <input
+          id="pin"
+          name="pin"
+          type="password"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          maxlength="8"
+          placeholder="••••"
+          required
+          autofocus
+        />
+        <button type="submit" id="btn-unlock">Unlock</button>
+      </form>
+      <p class="pin-error" id="pin-error" hidden>Incorrect PIN</p>
+    </main>
+
+    <div id="app-shell" hidden>
     <header class="topbar">
       <button type="button" class="ghost" id="btn-settings" aria-label="Settings">Settings</button>
+      <button type="button" class="ghost" id="btn-lock">Lock</button>
       <button type="button" class="ghost" id="btn-print" hidden>Print report</button>
     </header>
 
@@ -31,7 +56,6 @@
           type="search"
           placeholder='Jane Doe at Acme in Manchester'
           required
-          autofocus
         />
         <button type="submit" id="btn-lookup">Look up</button>
       </form>
@@ -93,15 +117,21 @@
         </label>
         <label>
           SpiderFoot bridge URL
-          <input id="set-sf" name="spiderfootUrl" type="url" placeholder="https://…" />
+          <input id="set-sf" name="spiderfootUrl" type="url" value="http://165.227.237.155:5001" placeholder="http://…:5001" />
         </label>
         <label>
-          BigBrother bridge URL
-          <input id="set-bb" name="bigbrotherBridgeUrl" type="url" placeholder="https://… (bridge only)" />
+          BigBrother bridge URL (private)
+          <input id="set-bb" name="bigbrotherBridgeUrl" type="url" value="http://127.0.0.1:8798" placeholder="http://127.0.0.1:8798" />
         </label>
         <label>
           SpiderDash bridge URL
-          <input id="set-sd" name="spiderdashUrl" type="url" placeholder="https://… (await until done)" />
+          <input
+            id="set-sd"
+            name="spiderdashUrl"
+            type="url"
+            value="https://spiderdash-mbpjlxnq.manus.space"
+            placeholder="https://spiderdash-….manus.space"
+          />
         </label>
         <label>
           Bridge wait (ms)
@@ -114,6 +144,7 @@
         </div>
       </form>
     </dialog>
+    </div>
 
     <script type="module" src="/app.js"></script>
   </body>

@@ -10,6 +10,7 @@ from .bigbrother import (
     register_bigbrother_modules,
 )
 from .bridge import run_bridge_scan
+from .http_server import PEOPLE_MODULE_IDS, enrich_people_payload, serve
 
 __all__ = [
     "ModuleResult",
@@ -28,4 +29,7 @@ __all__ = [
     "create_bigbrother_registry",
     "register_bigbrother_modules",
     "run_bridge_scan",
+    "PEOPLE_MODULE_IDS",
+    "enrich_people_payload",
+    "serve",
 ]

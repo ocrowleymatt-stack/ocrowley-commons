@@ -5,6 +5,15 @@
 
 import type { RecursiveOsintResult, OsintEvidenceItem } from './recursiveEngine.js';
 import type { RefinementSeed } from './refinementLoop.js';
+export {
+  SPIDERDASH_DEFAULT_URL,
+  SPIDERFOOT_DEFAULT_URL,
+  BIGBROTHER_DEFAULT_URL,
+  resolveSpiderdashUrl,
+  resolveSpiderfootUrl,
+  resolveBigbrotherUrl,
+  applyBridgeUrlDefaults,
+} from './bridgeDefaults.js';
 
 export interface SpiderdashEntity {
   type: string;
@@ -32,8 +41,6 @@ export const FLIPPER_BLE = {
   rpcTxUuid: '19ed82ae-ed21-4c9d-4145-228e62fe0001',
   rpcRxUuid: '19ed82ae-ed21-4c9d-4145-228e62fe0003',
 } as const;
-
-export const SPIDERDASH_DEFAULT_URL = 'https://spiderdash-mbpjlxnq.manus.space';
 
 export function evidenceToEntities(result: RecursiveOsintResult): SpiderdashEntity[] {
   const byValue = new Map<string, SpiderdashEntity>();

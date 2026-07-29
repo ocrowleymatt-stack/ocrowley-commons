@@ -71,7 +71,9 @@ describe('who()', () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () => new Response('page not found', { status: 404 })) as typeof fetch;
     const prevData = process.env.OCROWLEY_DATA_DIR;
+    const prevQuick = process.env.OCROWLEY_OSINT_QUICK;
     process.env.OCROWLEY_DATA_DIR = `/tmp/ocrowley-who-test-${Date.now()}`;
+    delete process.env.OCROWLEY_OSINT_QUICK;
     try {
       process.env.OCROWLEY_OSINT_CASE = 'CASE-WHO-FULL';
       const r = await who('Ada Lovelace', {
@@ -89,6 +91,8 @@ describe('who()', () => {
       globalThis.fetch = originalFetch;
       if (prevData === undefined) delete process.env.OCROWLEY_DATA_DIR;
       else process.env.OCROWLEY_DATA_DIR = prevData;
+      if (prevQuick === undefined) delete process.env.OCROWLEY_OSINT_QUICK;
+      else process.env.OCROWLEY_OSINT_QUICK = prevQuick;
     }
   });
 });

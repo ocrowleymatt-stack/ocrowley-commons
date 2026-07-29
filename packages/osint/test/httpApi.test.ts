@@ -4,7 +4,9 @@ import type { Server } from 'node:http';
 import {
   applySettings,
   buildHints,
+  configuredWhoPin,
   createWhoServer,
+  pinAuthorized,
   publicSettings,
   readSettings,
   resolveCaseRef,
@@ -12,6 +14,9 @@ import {
 } from '../src/httpApi.js';
 import { parseWhoInput, who } from '../src/index.js';
 import { whoToSpiderdashImport } from '../src/whoSpiderdash.js';
+
+const TEST_PIN = '3123';
+const PIN_HEADERS = { 'X-OCROWLEY-WHO-PIN': TEST_PIN };
 
 describe('who HTTP API helpers', () => {
   it('resolves case from header over body over env', () => {
@@ -26,6 +31,20 @@ describe('who HTTP API helpers', () => {
     } finally {
       if (prev === undefined) delete process.env.OCROWLEY_OSINT_CASE;
       else process.env.OCROWLEY_OSINT_CASE = prev;
+    }
+  });
+
+  it('defaults access PIN to 3123', () => {
+    const prev = process.env.OCROWLEY_WHO_PIN;
+    delete process.env.OCROWLEY_WHO_PIN;
+    try {
+      assert.equal(configuredWhoPin(), '3123');
+      assert.equal(configuredWhoPin('9999'), '9999');
+      assert.equal(pinAuthorized({ 'x-ocrowley-who-pin': '3123' }), true);
+      assert.equal(pinAuthorized({ 'x-ocrowley-who-pin': '0000' }), false);
+      assert.equal(pinAuthorized({}), false);
+    } finally {
+      restoreEnv('OCROWLEY_WHO_PIN', prev);
     }
   });
 
@@ -79,6 +98,7 @@ describe('who HTTP server', () => {
     process.env.OCROWLEY_OSINT_CASE = 'CASE-HTTP-1';
     process.env.OCROWLEY_OSINT_QUICK = '1'; // keep HTTP plumbing tests fast
     process.env.OCROWLEY_WHO_ARCHIVE = '0';
+    process.env.OCROWLEY_WHO_PIN = TEST_PIN;
     // Mock outbound OSINT probes, but let requests to this test server through.
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(typeof input === 'string' || input instanceof URL ? input : input.url);
@@ -87,7 +107,7 @@ describe('who HTTP server', () => {
       }
       return new Response('page not found', { status: 404 });
     }) as typeof fetch;
-    server = createWhoServer({ requireCase: true });
+    server = createWhoServer({ requireCase: true, pin: TEST_PIN });
     await new Promise<void>((resolve) => {
       server.listen(0, '127.0.0.1', () => resolve());
     });
@@ -100,13 +120,34 @@ describe('who HTTP server', () => {
     globalThis.fetch = originalFetch;
     delete process.env.OCROWLEY_OSINT_QUICK;
     delete process.env.OCROWLEY_WHO_ARCHIVE;
+    delete process.env.OCROWLEY_WHO_PIN;
     await new Promise<void>((resolve, reject) => server.close(err => (err ? reject(err) : resolve())));
   });
 
-  it('health + settings', async () => {
+  it('health reports pinRequired; unlock + PIN gate', async () => {
     const health = await fetch(`${base}/api/health`).then(r => r.json());
     assert.equal(health.ok, true);
-    const settings = await fetch(`${base}/api/settings`).then(r => r.json());
+    assert.equal(health.pinRequired, true);
+
+    const denied = await fetch(`${base}/api/settings`);
+    assert.equal(denied.status, 401);
+
+    const badUnlock = await fetch(`${base}/api/unlock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: '0000' }),
+    });
+    assert.equal(badUnlock.status, 401);
+
+    const unlock = await fetch(`${base}/api/unlock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: TEST_PIN }),
+    });
+    assert.equal(unlock.status, 200);
+    assert.equal((await unlock.json()).ok, true);
+
+    const settings = await fetch(`${base}/api/settings`, { headers: PIN_HEADERS }).then(r => r.json());
     assert.equal(settings.caseRef, 'CASE-HTTP-1');
   });
 
@@ -116,7 +157,7 @@ describe('who HTTP server', () => {
     try {
       const res = await fetch(`${base}/api/who`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...PIN_HEADERS },
         body: JSON.stringify({ q: 'Jane Doe' }),
       });
       assert.equal(res.status, 401);
@@ -131,6 +172,7 @@ describe('who HTTP server', () => {
       headers: {
         'Content-Type': 'application/json',
         'X-OCROWLEY-OSINT-CASE': 'CASE-HTTP-WHO',
+        ...PIN_HEADERS,
       },
       body: JSON.stringify({ q: 'Jane Doe at Acme in Manchester', username: 'janedoe', full: false }),
     });
@@ -153,13 +195,14 @@ describe('who HTTP server', () => {
       headers: {
         'Content-Type': 'application/json',
         'X-OCROWLEY-OSINT-CASE': 'CASE-ARCH',
+        ...PIN_HEADERS,
       },
       body: JSON.stringify({ q: 'Archive Me', full: false, archive: true }),
     });
     assert.equal(res.status, 200);
     const data = await res.json();
     assert.ok(data.archiveId);
-    const list = await fetch(`${base}/api/archive`).then(r => r.json());
+    const list = await fetch(`${base}/api/archive`, { headers: PIN_HEADERS }).then(r => r.json());
     assert.ok(list.entries.some((e: { id: string }) => e.id === data.archiveId));
     process.env.OCROWLEY_WHO_ARCHIVE = '0';
   });
@@ -167,18 +210,21 @@ describe('who HTTP server', () => {
   it('GET /api/who/text returns printable text', async () => {
     const res = await fetch(
       `${base}/api/who/text?q=${encodeURIComponent('Jane Doe')}&case=CASE-TEXT`,
+      { headers: PIN_HEADERS },
     );
     assert.equal(res.status, 200);
     const text = await res.text();
     assert.match(text, /WHO:/);
   });
 
-  it('serves the WHO web shell', async () => {
+  it('serves the WHO web shell with PIN gate', async () => {
     const res = await fetch(`${base}/`);
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /OCROWLEY/);
+    assert.match(html, /id="pin-form"/);
     assert.match(html, /id="who-form"/);
+    assert.match(html, /class="locked"/);
   });
 });
 

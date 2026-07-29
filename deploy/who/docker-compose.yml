@@ -1,0 +1,68 @@
+# Private WHO deploy — Node API/UI + BigBrother bridge sidecar
+# From repo root:
+#   cp deploy/who/.env.example deploy/who/.env   # edit secrets
+#   docker compose -f deploy/who/docker-compose.yml --env-file deploy/who/.env up -d --build
+#
+# BigBrother shares WHO's network namespace (localhost:8798) so it is never
+# published on the host and works even when bridge inter-container routing is broken.
+
+services:
+  who:
+    build:
+      context: ../..
+      dockerfile: deploy/who/Dockerfile
+      target: who
+    restart: unless-stopped
+    ports:
+      - "${OCROWLEY_WHO_PUBLISH_PORT:-8787}:8787"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      OCROWLEY_WHO_HOST: "0.0.0.0"
+      OCROWLEY_WHO_PORT: "8787"
+      OCROWLEY_DATA_DIR: /data
+      OCROWLEY_BB_AUTOSTART: "0"
+      OCROWLEY_BIGBROTHER_BRIDGE: http://127.0.0.1:8798
+      OCROWLEY_SPIDERDASH_URL: ${OCROWLEY_SPIDERDASH_URL:-https://spiderdash-mbpjlxnq.manus.space}
+      OCROWLEY_SPIDERFOOT_URL: ${OCROWLEY_SPIDERFOOT_URL:-http://165.227.237.155:5001}
+      OCROWLEY_OSINT_CASE: ${OCROWLEY_OSINT_CASE:?set OCROWLEY_OSINT_CASE in deploy/who/.env}
+      OCROWLEY_WHO_PIN: ${OCROWLEY_WHO_PIN:-3123}
+      OCROWLEY_OSINT_DEEP: ${OCROWLEY_OSINT_DEEP:-1}
+      OCROWLEY_BRIDGE_TIMEOUT_MS: ${OCROWLEY_BRIDGE_TIMEOUT_MS:-180000}
+      HIBP_API_KEY: ${HIBP_API_KEY:-}
+      COMPANIES_HOUSE_API_KEY: ${COMPANIES_HOUSE_API_KEY:-}
+      DEHASHED_API_KEY: ${DEHASHED_API_KEY:-}
+      DEHASHED_EMAIL: ${DEHASHED_EMAIL:-}
+      INTELX_API_KEY: ${INTELX_API_KEY:-}
+      OCROWLEY_ENABLE_CLI_TOOLS: ${OCROWLEY_ENABLE_CLI_TOOLS:-0}
+    volumes:
+      - who-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8787/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+
+  bb:
+    build:
+      context: ../..
+      dockerfile: deploy/who/Dockerfile
+      target: bb
+    restart: unless-stopped
+    network_mode: "service:who"
+    depends_on:
+      who:
+        condition: service_started
+    environment:
+      PYTHONUNBUFFERED: "1"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8798/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  who-data:

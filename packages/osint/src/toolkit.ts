@@ -13,6 +13,8 @@ import {
 } from '@ocrowley/darkweb';
 import { queryWayback } from './archive.js';
 import { runAwaitableBridge, bridgeTimeoutMs } from './bridgeAwait.js';
+import { resolveBigbrotherUrl, resolveSpiderfootUrl, applyBridgeUrlDefaults } from './bridgeDefaults.js';
+import { runSpiderdashWhoScan } from './spiderdashClient.js';
 import { detectExactDuplicates } from './dedup.js';
 import { buildUsernameVariants, inferEntityType } from './normalize.js';
 import { probeUsernamePlatforms } from './platforms.js';
@@ -86,7 +88,10 @@ async function runBridgeScanAndWait(
   startPath: string,
   body: unknown,
 ): Promise<Record<string, unknown> | null> {
-  const base = process.env[baseEnv];
+  applyBridgeUrlDefaults();
+  let base = process.env[baseEnv];
+  if (baseEnv === 'OCROWLEY_SPIDERFOOT_URL') base = resolveSpiderfootUrl();
+  if (baseEnv === 'OCROWLEY_BIGBROTHER_BRIDGE') base = resolveBigbrotherUrl() || undefined;
   if (!base) return null;
   return runAwaitableBridge({
     baseUrl: base,
@@ -333,10 +338,15 @@ export function createFullDiscover(opts: ToolkitOptions) {
 
     // BigBrother / SpiderFoot / SpiderDash HTTP bridges — await until finished
     if (enableBridges) {
+      applyBridgeUrlDefaults();
+
       const bb = await runBridgeScanAndWait('OCROWLEY_BIGBROTHER_BRIDGE', '/scan', {
         seeds,
         sweepNumber,
         authorizationRef: opts.auth.authorizationRef,
+        scanType: 'Passive',
+        peopleFocus: true,
+        privateUse: true,
       });
       if (bb) {
         usedTools.push('bb-bridge');
@@ -363,44 +373,26 @@ export function createFullDiscover(opts: ToolkitOptions) {
         for (const seed of payload.seeds ?? []) discoveredSeeds.push(seed);
       }
 
-      if (process.env.OCROWLEY_SPIDERDASH_URL) {
-        const dash =
-          (await runBridgeScanAndWait('OCROWLEY_SPIDERDASH_URL', '/api/scan', {
+      // SpiderDash / ARCANUM — tRPC scan + poll (defaults to hosted URL)
+      const personSeed =
+        seeds.find(s => s.type === 'person' || s.type === 'name')?.value ||
+        seeds.find(s => s.type === 'email' || s.type === 'username' || s.type === 'domain')?.value;
+      if (personSeed) {
+        try {
+          const dash = await runSpiderdashWhoScan({
+            target: personSeed,
+            name: `WHO: ${personSeed}`,
+            scanType: 'Passive',
             seeds,
-            sweepNumber,
             authorizationRef: opts.auth.authorizationRef,
-            source: 'ocrowley-who',
-          })) ||
-          (await runBridgeScanAndWait('OCROWLEY_SPIDERDASH_URL', '/api/intel/import', {
-            seeds,
-            sweepNumber,
-            authorizationRef: opts.auth.authorizationRef,
-            source: 'ocrowley-who',
-          }));
-        if (dash) {
-          usedTools.push('spiderdash-bridge');
-          const payload = dash as {
-            items?: OsintEvidenceItem[];
-            entities?: Array<{ type: string; value: string; notes?: string }>;
-            seeds?: RefinementSeed[];
-          };
-          for (const item of payload.items ?? []) pushItem(items, itemKeys, item, seen);
-          for (const ent of payload.entities ?? []) {
-            pushItem(
-              items,
-              itemKeys,
-              {
-                key: `spiderdash:${ent.type}:${ent.value}`,
-                entity: ent.value,
-                title: `SpiderDash · ${ent.type}`,
-                source: 'spiderdash-bridge',
-                snippet: ent.notes || ent.value,
-                score: 68,
-              },
-              seen,
-            );
+          });
+          if (dash) {
+            usedTools.push('spiderdash-bridge', 'spiderfoot-scan');
+            for (const item of dash.items) pushItem(items, itemKeys, item, seen);
+            for (const seed of dash.seeds) discoveredSeeds.push(seed);
           }
-          for (const seed of payload.seeds ?? []) discoveredSeeds.push(seed);
+        } catch {
+          /* best effort */
         }
       }
     }

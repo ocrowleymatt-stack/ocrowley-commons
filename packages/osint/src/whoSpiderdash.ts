@@ -5,7 +5,7 @@
 
 import type { WhoHit, WhoResult } from './who.js';
 import type { SpiderdashEntity } from './spiderdashBridge.js';
-import { SPIDERDASH_DEFAULT_URL } from './spiderdashBridge.js';
+import { resolveSpiderdashUrl } from './bridgeDefaults.js';
 
 function confidenceScore(c: WhoHit['confidence']): number {
   if (c === 'confirmed') return 92;
@@ -64,6 +64,6 @@ export function whoToSpiderdashImport(result: WhoResult): {
       summary: result.text.split('\n').slice(0, 6).join('\n'),
       warning: result.warning,
     },
-    defaultUrl: process.env.OCROWLEY_SPIDERDASH_URL || SPIDERDASH_DEFAULT_URL,
+    defaultUrl: resolveSpiderdashUrl(),
   };
 }

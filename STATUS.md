@@ -1,36 +1,40 @@
 # STATUS
 
-Last updated: 2026-07-26
+Last updated: 2026-07-29
 
 ## Platform
 
 - Repository: `ocrowleymatt-stack/ocrowley-commons`
 - Active branch: `cursor/ocrowley-commons-f5e3`
-- Role today: **shared library kernel**, not yet Matt OS application
+- Product path: **WHO** people OSINT (`@ocrowley/osint` + web + BB sidecar)
+
+## Ready for deploy
+
+- Docker Compose: `deploy/who/docker-compose.yml` (`who` + private `bb`)
+- Env template: `deploy/who/.env.example`
+- Runbook: [docs/DEPLOY_WHO.md](docs/DEPLOY_WHO.md)
+- Smoke: `npm run who:smoke` / `packages/osint/scripts/who-smoke.sh`
+- Defaults: SpiderDash + SpiderFoot URLs; BigBrother on `127.0.0.1:8798` (compose: internal `bb:8798`)
+
+```bash
+cp deploy/who/.env.example deploy/who/.env
+# set OCROWLEY_OSINT_CASE
+npm run who:up && npm run who:smoke
+```
 
 ## Verified this cycle
 
-- TypeScript workspaces green (osint now includes full toolkit + recursive defaults)
-- Python pytest green including BigBrother registry (19 modules)
-- Full toolkit: commons + darkweb + bigbrother + spiderfoot + CLI bridges
-- `runRecursiveOsint()` uses full toolkit by default; `reportToolkitAvailability()` lists readiness
-- Docs: ARCHITECTURE, EXTRACTION_MAP, COMPLEMENTARY_OSS, PUBLISH, PROJECT_SUGGESTIONS
-
-## Missing for Matt OS Slice 0–1
-
-- Mission / Outcome Contract model
-- Matt Proxy package
-- Approval-card UX / iPad shell
-- Mail / calendar adapters (even mocks)
-- STATUS-linked ops set (BACKLOG, DECISIONS, RUNBOOK, etc.) — only STATUS + PROJECT_SUGGESTIONS added this cycle
+- TypeScript `@ocrowley/osint` tests green (WHO HTTP, full toolkit, archive, bridges)
+- Python BigBrother registry + HTTP bridge tests green
+- CI builds policy/darkweb/osint explicitly
 
 ## SpiderDash / Apple
 
-- Native shell improved in `spiderdash-ios` (`com.ocrowley.matt.spiderdash`, team `9ZV5QPNN4M`)
-- `@ocrowley/osint` exports `buildSpiderdashImportPayload` + Flipper BLE UUID constants
-- TestFlight path documented; requires Mac + App Store Connect app ID + secrets
+- Native shell: `spiderdash-ios` (`com.ocrowley.matt.spiderdash`)
+- Hosted ARCANUM: `https://spiderdash-mbpjlxnq.manus.space`
 
-## Next implementation action
+## Next
 
-1. On Mac: `npx cap add ios` in spiderdash-ios, sign with Apple team, TestFlight  
-2. Mission kernel + “Deal with this” vertical slice (Matt OS)
+1. Put TLS / access control in front of `:8787`
+2. Install private `the_big_brother` into the `bb` image when ready
+3. Merge PR #1 when review is satisfied

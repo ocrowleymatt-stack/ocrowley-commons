@@ -32,6 +32,7 @@ import {
 import { createFullDiscover, createFullEnrich, reportToolkitAvailability } from './toolkit.js';
 import { searchCompaniesHouseOfficers } from './ukRecords.js';
 import { archiveWhoResult } from './whoArchive.js';
+import { applyBridgeUrlDefaults } from './bridgeDefaults.js';
 import { EVIDENTIAL_WARNING, REPORT_CLASSIFICATION, type PlatformProbe } from './types.js';
 
 /** All catalogued platforms for maximum coverage. */
@@ -315,6 +316,8 @@ function extractToolsUsed(evidence: OsintEvidenceItem[], extra: string[]): strin
  */
 export async function who(input: string, hints: WhoHints = {}): Promise<WhoResult> {
   if (!input?.trim()) throw new Error('who(input): pass a name, email, @username, or "Name at Org in City"');
+
+  applyBridgeUrlDefaults();
 
   const auth = defaultAuth(hints.case);
   assertOsintAllowed('enrich.person', auth);

@@ -36,6 +36,14 @@ npm run who:server -w @ocrowley/osint
 # open http://127.0.0.1:8787  — brand + one search field
 ```
 
+**Deploy (Docker):** see [docs/DEPLOY_WHO.md](docs/DEPLOY_WHO.md)
+
+```bash
+cp deploy/who/.env.example deploy/who/.env   # set OCROWLEY_OSINT_CASE
+npm run who:up
+npm run who:smoke
+```
+
 Prefer SpiderDash when attached; commons ships the thin `who()` API + minimal UI with **full toolkit** by default (bridges await completion; lookups archived under `$OCROWLEY_DATA_DIR/who-archive`). See [packages/osint/README.md](packages/osint/README.md).
 
 ## Packages (Python)

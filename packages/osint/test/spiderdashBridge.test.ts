@@ -4,6 +4,7 @@ import {
   buildSpiderdashImportPayload,
   FLIPPER_BLE,
   SPIDERDASH_DEFAULT_URL,
+  SPIDERFOOT_DEFAULT_URL,
   suggestFlipperCommands,
 } from '../src/index.js';
 
@@ -11,6 +12,7 @@ describe('spiderdash bridge', () => {
   it('exposes Flipper BLE UUIDs and default URL', () => {
     assert.match(FLIPPER_BLE.serviceUuid, /fef6/i);
     assert.equal(SPIDERDASH_DEFAULT_URL, 'https://spiderdash-mbpjlxnq.manus.space');
+    assert.match(SPIDERFOOT_DEFAULT_URL, /165\.227\.237\.155:5001/);
   });
 
   it('maps recursive results to SpiderDash entities', () => {
