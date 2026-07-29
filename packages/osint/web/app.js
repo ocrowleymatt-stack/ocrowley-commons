@@ -76,9 +76,9 @@ async function hydrateSettingsForm() {
   els.setDeep.checked = local.deep ?? remote.deep ?? true;
   els.setFull.checked = local.full ?? remote.full ?? true;
   els.setCli.checked = Boolean(local.enableCliTools ?? remote.enableCliTools);
-  els.setSf.value = local.spiderfootUrl || remote.spiderfootUrl || '';
+  els.setSf.value = local.spiderfootUrl || remote.spiderfootUrl || 'http://165.227.237.155:5001';
   els.setBb.value = local.bigbrotherBridgeUrl || remote.bigbrotherBridgeUrl || '';
-  els.setSd.value = local.spiderdashUrl || remote.spiderdashUrl || '';
+  els.setSd.value = local.spiderdashUrl || remote.spiderdashUrl || 'https://spiderdash-mbpjlxnq.manus.space';
   els.setTimeout.value = local.bridgeTimeoutMs || remote.bridgeTimeoutMs || 180000;
   els.setHibp.value = '';
   els.setCh.value = '';
@@ -229,9 +229,14 @@ els.settingsForm.addEventListener('submit', async (e) => {
   }
 });
 
-// Defaults: full power on first visit
+// Defaults: full power + hosted bridge URLs on first visit
 if (!localStorage.getItem(STORAGE_KEY)) {
-  saveLocalSettings({ deep: true, full: true });
+  saveLocalSettings({
+    deep: true,
+    full: true,
+    spiderdashUrl: 'https://spiderdash-mbpjlxnq.manus.space',
+    spiderfootUrl: 'http://165.227.237.155:5001',
+  });
 }
 
 hydrateSettingsForm().catch(() => {});

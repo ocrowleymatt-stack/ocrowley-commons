@@ -15,6 +15,15 @@ import { listWhoArchive, readWhoArchive } from './whoArchive.js';
 import { reportToolkitAvailability } from './toolkit.js';
 import { EVIDENTIAL_WARNING, REPORT_CLASSIFICATION } from './types.js';
 import { bridgeTimeoutMs } from './bridgeAwait.js';
+import {
+  applyBridgeUrlDefaults,
+  resolveBigbrotherUrl,
+  resolveSpiderdashUrl,
+  resolveSpiderfootUrl,
+} from './bridgeDefaults.js';
+
+// Ensure hosted bridge URLs are set when env is empty.
+applyBridgeUrlDefaults();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -52,15 +61,16 @@ const SETTINGS_ENV = [
 ] as const;
 
 export function readSettings(): WhoApiSettings {
+  applyBridgeUrlDefaults();
   return {
     caseRef: process.env.OCROWLEY_OSINT_CASE || '',
     hibpApiKey: process.env.HIBP_API_KEY || '',
     companiesHouseApiKey: process.env.COMPANIES_HOUSE_API_KEY || '',
     deep: process.env.OCROWLEY_OSINT_DEEP !== '0',
     full: process.env.OCROWLEY_OSINT_QUICK !== '1',
-    spiderfootUrl: process.env.OCROWLEY_SPIDERFOOT_URL || '',
-    bigbrotherBridgeUrl: process.env.OCROWLEY_BIGBROTHER_BRIDGE || '',
-    spiderdashUrl: process.env.OCROWLEY_SPIDERDASH_URL || '',
+    spiderfootUrl: resolveSpiderfootUrl(),
+    bigbrotherBridgeUrl: resolveBigbrotherUrl(),
+    spiderdashUrl: resolveSpiderdashUrl(),
     bridgeTimeoutMs: bridgeTimeoutMs(),
     enableCliTools: process.env.OCROWLEY_ENABLE_CLI_TOOLS === '1',
     purpose: process.env.OCROWLEY_OSINT_PURPOSE || 'authorised people research',

@@ -69,4 +69,13 @@ npm run who:server -w @ocrowley/osint
 
 Searches run **server-side**. Each lookup is archived under `$OCROWLEY_DATA_DIR/who-archive/` (disable with `OCROWLEY_WHO_ARCHIVE=0` or `{ archive: false }`).
 
-Lawful use only. Leads ≠ evidence.
+## Env
+
+| Variable | Default |
+|----------|---------|
+| `OCROWLEY_SPIDERDASH_URL` | `https://spiderdash-mbpjlxnq.manus.space` |
+| `OCROWLEY_SPIDERFOOT_URL` | `http://165.227.237.155:5001` |
+| `OCROWLEY_BIGBROTHER_BRIDGE` | _(none — set if you run a bridge)_ |
+| `OCROWLEY_BRIDGE_TIMEOUT_MS` | `180000` |
+
+See `.env.example`. Lawful use only. Leads ≠ evidence.

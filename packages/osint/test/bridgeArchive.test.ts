@@ -2,6 +2,36 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAwaitableBridge, bridgeTimeoutMs } from '../src/bridgeAwait.js';
 import { archiveWhoResult, listWhoArchive, readWhoArchive } from '../src/whoArchive.js';
+import {
+  applyBridgeUrlDefaults,
+  resolveSpiderdashUrl,
+  resolveSpiderfootUrl,
+  SPIDERDASH_DEFAULT_URL,
+  SPIDERFOOT_DEFAULT_URL,
+} from '../src/bridgeDefaults.js';
+
+describe('bridge defaults', () => {
+  it('resolves hosted SpiderDash + SpiderFoot URLs', () => {
+    const prevSd = process.env.OCROWLEY_SPIDERDASH_URL;
+    const prevSf = process.env.OCROWLEY_SPIDERFOOT_URL;
+    delete process.env.OCROWLEY_SPIDERDASH_URL;
+    delete process.env.OCROWLEY_SPIDERFOOT_URL;
+    try {
+      assert.equal(resolveSpiderdashUrl(), SPIDERDASH_DEFAULT_URL);
+      assert.equal(resolveSpiderfootUrl(), SPIDERFOOT_DEFAULT_URL);
+      const applied = applyBridgeUrlDefaults();
+      assert.equal(applied.spiderdashUrl, SPIDERDASH_DEFAULT_URL);
+      assert.equal(applied.spiderfootUrl, SPIDERFOOT_DEFAULT_URL);
+      assert.match(process.env.OCROWLEY_SPIDERDASH_URL || '', /spiderdash/);
+      assert.match(process.env.OCROWLEY_SPIDERFOOT_URL || '', /165\.227\.237\.155/);
+    } finally {
+      if (prevSd === undefined) delete process.env.OCROWLEY_SPIDERDASH_URL;
+      else process.env.OCROWLEY_SPIDERDASH_URL = prevSd;
+      if (prevSf === undefined) delete process.env.OCROWLEY_SPIDERFOOT_URL;
+      else process.env.OCROWLEY_SPIDERFOOT_URL = prevSf;
+    }
+  });
+});
 
 describe('bridge await', () => {
   it('defaults to a long enough SpiderFoot/SpiderDash wait window', () => {
