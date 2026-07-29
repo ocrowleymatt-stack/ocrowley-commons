@@ -36,7 +36,7 @@ npm run who:server -w @ocrowley/osint
 # open http://127.0.0.1:8787  — brand + one search field
 ```
 
-Prefer SpiderDash when attached; commons ships the thin `who()` API + minimal UI. See [packages/osint/README.md](packages/osint/README.md).
+Prefer SpiderDash when attached; commons ships the thin `who()` API + minimal UI with **full toolkit** by default (bridges await completion; lookups archived under `$OCROWLEY_DATA_DIR/who-archive`). See [packages/osint/README.md](packages/osint/README.md).
 
 ## Packages (Python)
 
