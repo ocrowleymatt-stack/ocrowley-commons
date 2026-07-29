@@ -7,11 +7,13 @@ const els = {
   viewSearch: document.getElementById('view-search'),
   viewResults: document.getElementById('view-results'),
   stats: document.getElementById('stats'),
+  tools: document.getElementById('tools'),
   openNext: document.getElementById('open-next'),
   report: document.getElementById('report'),
   hits: document.getElementById('hits'),
   more: document.getElementById('more-links'),
   warning: document.getElementById('warning'),
+  archiveMeta: document.getElementById('archive-meta'),
   btnBack: document.getElementById('btn-back'),
   btnPrint: document.getElementById('btn-print'),
   btnSettings: document.getElementById('btn-settings'),
@@ -21,10 +23,14 @@ const els = {
   settingsStatus: document.getElementById('settings-status'),
   setCase: document.getElementById('set-case'),
   setDeep: document.getElementById('set-deep'),
+  setFull: document.getElementById('set-full'),
+  setCli: document.getElementById('set-cli'),
   setHibp: document.getElementById('set-hibp'),
   setCh: document.getElementById('set-ch'),
   setSf: document.getElementById('set-sf'),
   setBb: document.getElementById('set-bb'),
+  setSd: document.getElementById('set-sd'),
+  setTimeout: document.getElementById('set-timeout'),
 };
 
 function loadLocalSettings() {
@@ -67,13 +73,18 @@ async function hydrateSettingsForm() {
     /* offline / first paint */
   }
   els.setCase.value = local.caseRef || remote.caseRef || '';
-  els.setDeep.checked = Boolean(local.deep ?? remote.deep);
+  els.setDeep.checked = local.deep ?? remote.deep ?? true;
+  els.setFull.checked = local.full ?? remote.full ?? true;
+  els.setCli.checked = Boolean(local.enableCliTools ?? remote.enableCliTools);
   els.setSf.value = local.spiderfootUrl || remote.spiderfootUrl || '';
   els.setBb.value = local.bigbrotherBridgeUrl || remote.bigbrotherBridgeUrl || '';
+  els.setSd.value = local.spiderdashUrl || remote.spiderdashUrl || '';
+  els.setTimeout.value = local.bridgeTimeoutMs || remote.bridgeTimeoutMs || 180000;
   els.setHibp.value = '';
   els.setCh.value = '';
-  els.settingsStatus.textContent = remote.hibpConfigured
-    ? `Server: HIBP ${remote.hibpConfigured ? 'on' : 'off'} · CH ${remote.companiesHouseConfigured ? 'on' : 'off'}`
+  const ready = remote.toolsReady != null ? `${remote.toolsReady} live · ${remote.bridgesReady || 0} bridges` : '';
+  els.settingsStatus.textContent = ready
+    ? `Tools ready: ${ready}`
     : remote.caseRef
       ? `Case on server: ${remote.caseRef}`
       : 'No case on server yet';
@@ -89,10 +100,18 @@ function showResults(data) {
 
   const s = data.stats || {};
   els.stats.textContent = `${s.confirmed ?? 0} confirmed · ${s.likely ?? 0} likely · ${s.possible ?? 0} possible · ${s.checked ?? 0} checked`;
+  const tools = data.toolsUsed || [];
+  const rec = data.recursive;
+  els.tools.textContent = tools.length
+    ? `Tools · ${tools.slice(0, 18).join(', ')}${tools.length > 18 ? '…' : ''}${
+        rec ? ` · score ${rec.score} · ${rec.sweeps} sweeps` : ''
+      }`
+    : '';
   els.openNext.href = data.next || '#';
   els.openNext.textContent = data.next ? 'Open next' : 'No next link';
   els.report.textContent = data.text || '';
   els.warning.textContent = data.warning || '';
+  els.archiveMeta.textContent = data.archiveId ? `Archived as ${data.archiveId}` : '';
 
   els.hits.innerHTML = '';
   for (const hit of data.hits || []) {
@@ -151,13 +170,15 @@ els.form.addEventListener('submit', async (e) => {
     return;
   }
   els.btnLookup.disabled = true;
-  els.btnLookup.textContent = 'Looking…';
+  els.btnLookup.textContent = local.full === false ? 'Looking…' : 'Full scan…';
   try {
     const data = await api('/api/who', {
       method: 'POST',
       body: JSON.stringify({
         q,
-        deep: Boolean(local.deep),
+        deep: local.deep !== false,
+        full: local.full !== false,
+        enableCliTools: Boolean(local.enableCliTools),
         case: local.caseRef,
       }),
     });
@@ -183,30 +204,34 @@ els.settingsForm.addEventListener('submit', async (e) => {
   const payload = {
     caseRef: els.setCase.value.trim(),
     deep: els.setDeep.checked,
+    full: els.setFull.checked,
+    enableCliTools: els.setCli.checked,
     spiderfootUrl: els.setSf.value.trim(),
     bigbrotherBridgeUrl: els.setBb.value.trim(),
+    spiderdashUrl: els.setSd.value.trim(),
+    bridgeTimeoutMs: Number(els.setTimeout.value || 180000),
   };
   if (els.setHibp.value.trim()) payload.hibpApiKey = els.setHibp.value.trim();
   if (els.setCh.value.trim()) payload.companiesHouseApiKey = els.setCh.value.trim();
 
-  saveLocalSettings({
-    caseRef: payload.caseRef,
-    deep: payload.deep,
-    spiderfootUrl: payload.spiderfootUrl,
-    bigbrotherBridgeUrl: payload.bigbrotherBridgeUrl,
-  });
+  saveLocalSettings(payload);
 
   try {
     const remote = await api('/api/settings', {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
-    els.settingsStatus.textContent = `Saved. Case ${remote.caseRef || payload.caseRef}`;
+    els.settingsStatus.textContent = `Saved. Case ${remote.caseRef || payload.caseRef} · full=${remote.full}`;
     els.setHibp.value = '';
     els.setCh.value = '';
   } catch (err) {
     els.settingsStatus.textContent = err.message || String(err);
   }
 });
+
+// Defaults: full power on first visit
+if (!localStorage.getItem(STORAGE_KEY)) {
+  saveLocalSettings({ deep: true, full: true });
+}
 
 hydrateSettingsForm().catch(() => {});

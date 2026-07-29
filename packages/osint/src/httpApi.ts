@@ -11,7 +11,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { who, whoText, type WhoHints, type WhoResult } from './who.js';
 import { whoToSpiderdashImport } from './whoSpiderdash.js';
+import { listWhoArchive, readWhoArchive } from './whoArchive.js';
+import { reportToolkitAvailability } from './toolkit.js';
 import { EVIDENTIAL_WARNING, REPORT_CLASSIFICATION } from './types.js';
+import { bridgeTimeoutMs } from './bridgeAwait.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -20,8 +23,12 @@ export interface WhoApiSettings {
   hibpApiKey: string;
   companiesHouseApiKey: string;
   deep: boolean;
+  full: boolean;
   spiderfootUrl: string;
   bigbrotherBridgeUrl: string;
+  spiderdashUrl: string;
+  bridgeTimeoutMs: number;
+  enableCliTools: boolean;
   purpose: string;
 }
 
@@ -34,21 +41,28 @@ export interface WhoHttpServerOptions {
   requireCase?: boolean;
 }
 
-const SETTINGS_ENV: Record<keyof Omit<WhoApiSettings, 'deep' | 'caseRef' | 'purpose'>, string> = {
-  hibpApiKey: 'HIBP_API_KEY',
-  companiesHouseApiKey: 'COMPANIES_HOUSE_API_KEY',
-  spiderfootUrl: 'OCROWLEY_SPIDERFOOT_URL',
-  bigbrotherBridgeUrl: 'OCROWLEY_BIGBROTHER_BRIDGE',
-};
+const SETTINGS_ENV = [
+  'HIBP_API_KEY',
+  'COMPANIES_HOUSE_API_KEY',
+  'OCROWLEY_SPIDERFOOT_URL',
+  'OCROWLEY_BIGBROTHER_BRIDGE',
+  'OCROWLEY_SPIDERDASH_URL',
+  'OCROWLEY_BRIDGE_TIMEOUT_MS',
+  'OCROWLEY_ENABLE_CLI_TOOLS',
+] as const;
 
 export function readSettings(): WhoApiSettings {
   return {
     caseRef: process.env.OCROWLEY_OSINT_CASE || '',
     hibpApiKey: process.env.HIBP_API_KEY || '',
     companiesHouseApiKey: process.env.COMPANIES_HOUSE_API_KEY || '',
-    deep: process.env.OCROWLEY_OSINT_DEEP === '1',
+    deep: process.env.OCROWLEY_OSINT_DEEP !== '0',
+    full: process.env.OCROWLEY_OSINT_QUICK !== '1',
     spiderfootUrl: process.env.OCROWLEY_SPIDERFOOT_URL || '',
     bigbrotherBridgeUrl: process.env.OCROWLEY_BIGBROTHER_BRIDGE || '',
+    spiderdashUrl: process.env.OCROWLEY_SPIDERDASH_URL || '',
+    bridgeTimeoutMs: bridgeTimeoutMs(),
+    enableCliTools: process.env.OCROWLEY_ENABLE_CLI_TOOLS === '1',
     purpose: process.env.OCROWLEY_OSINT_PURPOSE || 'authorised people research',
   };
 }
@@ -64,6 +78,9 @@ export function applySettings(partial: Partial<WhoApiSettings>): WhoApiSettings 
   if (partial.deep !== undefined) {
     process.env.OCROWLEY_OSINT_DEEP = partial.deep ? '1' : '0';
   }
+  if (partial.full !== undefined) {
+    process.env.OCROWLEY_OSINT_QUICK = partial.full ? '0' : '1';
+  }
   if (partial.hibpApiKey !== undefined) {
     process.env.HIBP_API_KEY = String(partial.hibpApiKey).trim();
   }
@@ -76,20 +93,52 @@ export function applySettings(partial: Partial<WhoApiSettings>): WhoApiSettings 
   if (partial.bigbrotherBridgeUrl !== undefined) {
     process.env.OCROWLEY_BIGBROTHER_BRIDGE = String(partial.bigbrotherBridgeUrl).trim();
   }
+  if (partial.spiderdashUrl !== undefined) {
+    process.env.OCROWLEY_SPIDERDASH_URL = String(partial.spiderdashUrl).trim();
+  }
+  if (partial.bridgeTimeoutMs !== undefined) {
+    process.env.OCROWLEY_BRIDGE_TIMEOUT_MS = String(partial.bridgeTimeoutMs);
+  }
+  if (partial.enableCliTools !== undefined) {
+    process.env.OCROWLEY_ENABLE_CLI_TOOLS = partial.enableCliTools ? '1' : '0';
+  }
   return readSettings();
 }
 
 export function publicSettings(s: WhoApiSettings = readSettings()) {
+  const tools = reportToolkitAvailability({
+    auth: {
+      actorId: 'settings',
+      roles: ['osint-operator'],
+      authorizationRef: s.caseRef || 'settings',
+      purpose: s.purpose,
+    },
+    darkwebAuth: s.deep
+      ? {
+          actorId: 'settings',
+          roles: ['osint-operator'],
+          authorizationRef: s.caseRef || 'settings',
+          purpose: s.purpose,
+          lawfulUseAcknowledged: true,
+        }
+      : undefined,
+    enableCliTools: s.enableCliTools,
+  });
   return {
     caseRef: s.caseRef,
     deep: s.deep,
+    full: s.full,
     purpose: s.purpose,
     spiderfootUrl: s.spiderfootUrl,
     bigbrotherBridgeUrl: s.bigbrotherBridgeUrl,
+    spiderdashUrl: s.spiderdashUrl,
+    bridgeTimeoutMs: s.bridgeTimeoutMs,
+    enableCliTools: s.enableCliTools,
     hibpConfigured: Boolean(s.hibpApiKey),
     companiesHouseConfigured: Boolean(s.companiesHouseApiKey),
-    /** Keys never echoed; clients may re-submit to rotate. */
-    envHints: Object.values(SETTINGS_ENV),
+    toolsReady: tools.liveCount,
+    bridgesReady: tools.bridgeReadyCount,
+    envHints: [...SETTINGS_ENV],
     classification: REPORT_CLASSIFICATION,
     warning: EVIDENTIAL_WARNING,
   };
@@ -123,6 +172,8 @@ export interface WhoRequestBody {
   query?: string;
   input?: string;
   deep?: boolean;
+  full?: boolean;
+  archive?: boolean;
   case?: string;
   at?: string;
   in?: string;
@@ -132,6 +183,7 @@ export interface WhoRequestBody {
   aka?: string | string[];
   country?: 'uk' | 'us' | 'other';
   format?: 'json' | 'text';
+  enableCliTools?: boolean;
 }
 
 export function buildHints(body: WhoRequestBody, caseRef: string): WhoHints {
@@ -145,6 +197,9 @@ export function buildHints(body: WhoRequestBody, caseRef: string): WhoHints {
     country: body.country,
     case: caseRef,
     deep: body.deep,
+    full: body.full,
+    archive: body.archive,
+    enableCliTools: body.enableCliTools,
   };
 }
 
@@ -222,6 +277,10 @@ export function serializeWhoResult(r: WhoResult) {
     stats: r.stats,
     text: r.text,
     warning: r.warning,
+    toolsUsed: r.toolsUsed,
+    toolsReady: r.toolsReady,
+    archiveId: r.archiveId,
+    recursive: r.recursive,
     classification: REPORT_CLASSIFICATION,
     spiderdash: whoToSpiderdashImport(r),
   };
@@ -270,11 +329,37 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
           hibpApiKey: (body as Partial<WhoApiSettings>).hibpApiKey,
           companiesHouseApiKey: (body as Partial<WhoApiSettings>).companiesHouseApiKey,
           deep: body.deep,
+          full: (body as Partial<WhoApiSettings>).full ?? body.full,
           spiderfootUrl: (body as Partial<WhoApiSettings>).spiderfootUrl,
           bigbrotherBridgeUrl: (body as Partial<WhoApiSettings>).bigbrotherBridgeUrl,
+          spiderdashUrl: (body as Partial<WhoApiSettings>).spiderdashUrl,
+          bridgeTimeoutMs: (body as Partial<WhoApiSettings>).bridgeTimeoutMs,
+          enableCliTools: (body as Partial<WhoApiSettings>).enableCliTools ?? body.enableCliTools,
           purpose: (body as Partial<WhoApiSettings>).purpose,
         });
         sendJson(res, 200, publicSettings(next));
+        return;
+      }
+
+      if (pathname === '/api/tools' && method === 'GET') {
+        sendJson(res, 200, publicSettings());
+        return;
+      }
+
+      if (pathname === '/api/archive' && method === 'GET') {
+        const limit = Number(url.searchParams.get('limit') || 40);
+        sendJson(res, 200, { entries: await listWhoArchive(limit) });
+        return;
+      }
+
+      if (pathname.startsWith('/api/archive/') && method === 'GET') {
+        const id = pathname.slice('/api/archive/'.length);
+        const entry = await readWhoArchive(id);
+        if (!entry) {
+          sendJson(res, 404, { error: 'Archive entry not found' });
+          return;
+        }
+        sendJson(res, 200, entry);
         return;
       }
 
@@ -305,16 +390,24 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
         }
 
         const deepParam = url.searchParams.get('deep');
+        const fullParam = url.searchParams.get('full');
         const deep =
           body.deep === true ||
           deepParam === '1' ||
           deepParam === 'true' ||
           (body.deep === undefined && deepParam === null ? undefined : false);
+        const full =
+          body.full === false || fullParam === '0' || fullParam === 'false'
+            ? false
+            : body.full === true || fullParam === '1' || fullParam === 'true'
+              ? true
+              : undefined;
 
         const hints = buildHints(
           {
             ...body,
             deep: deep === undefined ? body.deep : deep,
+            full,
             at: body.at || url.searchParams.get('at') || undefined,
             in: body.in || url.searchParams.get('in') || undefined,
             email: body.email || url.searchParams.get('email') || undefined,

@@ -44,6 +44,7 @@
         <p class="brand-mini">OCROWLEY · WHO</p>
       </div>
       <div class="stats" id="stats"></div>
+      <p class="tools" id="tools"></p>
       <a class="open-next" id="open-next" href="#" target="_blank" rel="noopener">Open next</a>
       <pre class="report" id="report"></pre>
       <div class="hits" id="hits"></div>
@@ -52,6 +53,7 @@
         <ul id="more-links"></ul>
       </div>
       <p class="warning" id="warning"></p>
+      <p class="archive-meta" id="archive-meta"></p>
     </section>
 
     <dialog id="settings-dialog">
@@ -64,8 +66,16 @@
           <input id="set-case" name="caseRef" placeholder="OCROWLEY_OSINT_CASE" required />
         </label>
         <label class="row">
-          <input id="set-deep" name="deep" type="checkbox" />
-          Deep (Ahmia / extra paths when available)
+          <input id="set-deep" name="deep" type="checkbox" checked />
+          Deep (Ahmia / breach paths when available)
+        </label>
+        <label class="row">
+          <input id="set-full" name="full" type="checkbox" checked />
+          Full toolkit (recursive discover + bridges; waits for SpiderFoot/SpiderDash)
+        </label>
+        <label class="row">
+          <input id="set-cli" name="enableCliTools" type="checkbox" />
+          Enable CLI bridges (sherlock / maigret / holehe)
         </label>
         <label>
           HIBP API key
@@ -88,6 +98,14 @@
         <label>
           BigBrother bridge URL
           <input id="set-bb" name="bigbrotherBridgeUrl" type="url" placeholder="https://… (bridge only)" />
+        </label>
+        <label>
+          SpiderDash bridge URL
+          <input id="set-sd" name="spiderdashUrl" type="url" placeholder="https://… (await until done)" />
+        </label>
+        <label>
+          Bridge wait (ms)
+          <input id="set-timeout" name="bridgeTimeoutMs" type="number" min="30000" step="10000" placeholder="180000" />
         </label>
         <p class="settings-status" id="settings-status"></p>
         <div class="settings-actions">

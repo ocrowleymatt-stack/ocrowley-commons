@@ -17,3 +17,4 @@ node_modules/
 *.egg-info/
 packages/*/dist/
 python/**/*.egg-info/
+data/

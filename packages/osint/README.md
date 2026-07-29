@@ -6,9 +6,15 @@
 import { who } from '@ocrowley/osint';
 
 const r = await who('Jane Doe at Acme in Manchester');
-console.log(r.text);  // printable report
-console.log(r.next);  // best URL to open now
+console.log(r.text);       // printable report
+console.log(r.next);       // best URL to open now
+console.log(r.toolsUsed);  // every tool that fired
+console.log(r.archiveId);  // server-side archive entry
 ```
+
+By default `who()` runs the **full toolkit**: fast people probes + recursive discover/critique across platforms, Wayback, Companies House, HIBP/DeHashed/IntelX (when keyed), Ahmia (deep), and optional SpiderFoot / BigBrother / SpiderDash / CLI bridges. Bridges **poll until finished** (default wait 180s via `OCROWLEY_BRIDGE_TIMEOUT_MS`).
+
+Prefer `who()` over `findPerson`. Pass `{ full: false }` for probes-only.
 
 Also: `who('jane@acme.com')` · `who('@janedoe')` · `who('Jane Doe', { deep: true, case: 'CASE-42' })`
 
@@ -16,7 +22,8 @@ CLI:
 
 ```bash
 npm run who -w @ocrowley/osint -- "Jane Doe at Acme in Manchester"
-# or: ocrowley-who "Jane Doe" --deep
+# or: ocrowley-who "Jane Doe" --full --cli
+# quick: ocrowley-who "Jane Doe" --quick
 ```
 
 ## WHO web + HTTP API
@@ -26,15 +33,20 @@ SpiderDash / spiderfoot-ui is the preferred product shell when attached. This pa
 ```bash
 # from repo root
 npm install
-npm run build -w @ocrowley/osint
+npm run build -w @ocrowley/policy -w @ocrowley/darkweb -w @ocrowley/osint
 
 export OCROWLEY_OSINT_CASE=CASE-1          # required (default-deny)
-# optional:
+# optional power:
 # export HIBP_API_KEY=...
 # export COMPANIES_HOUSE_API_KEY=...
-# export OCROWLEY_OSINT_DEEP=1
-# export OCROWLEY_SPIDERFOOT_URL=https://…   # bridge only
+# export DEHASHED_API_KEY=... DEHASHED_EMAIL=...
+# export INTELX_API_KEY=...
+# export OCROWLEY_SPIDERFOOT_URL=https://…   # awaited until done
 # export OCROWLEY_BIGBROTHER_BRIDGE=https://… # bridge only — do not vendor
+# export OCROWLEY_SPIDERDASH_URL=https://…  # awaited until done
+# export OCROWLEY_BRIDGE_TIMEOUT_MS=180000
+# export OCROWLEY_ENABLE_CLI_TOOLS=1
+# export OCROWLEY_DATA_DIR=./data           # who-archive lives here
 
 npm run who:server -w @ocrowley/osint
 # → http://127.0.0.1:8787
@@ -45,37 +57,16 @@ npm run who:server -w @ocrowley/osint
 | Method | Path | Notes |
 |--------|------|--------|
 | `GET` | `/api/health` | Liveness |
-| `GET`/`PUT` | `/api/settings` | Case ref, deep toggle, bridge URLs; keys accepted on PUT, never echoed |
-| `POST` | `/api/who` | Body `{ "q": "Jane Doe at Acme in Manchester", "deep": false }` |
+| `GET`/`PUT` | `/api/settings` | Case, full/deep, bridges, CLI; keys accepted on PUT, never echoed |
+| `GET` | `/api/tools` | Ready tool / bridge counts |
+| `POST` | `/api/who` | Body `{ "q": "…", "full": true }` — full toolkit by default |
 | `GET` | `/api/who?q=…` | Same as POST |
 | `GET`/`POST` | `/api/who/text` | Printable `text/plain` via `whoText()` |
+| `GET` | `/api/archive` | List saved lookups |
+| `GET` | `/api/archive/:id` | Load one archived report |
 
 **Case auth:** `X-OCROWLEY-OSINT-CASE` header, `Authorization: Bearer <case>`, body/query `case`, or `OCROWLEY_OSINT_CASE` env. Missing case → `401`.
 
-```bash
-curl -sS http://127.0.0.1:8787/api/who \
-  -H 'Content-Type: application/json' \
-  -H 'X-OCROWLEY-OSINT-CASE: CASE-1' \
-  -d '{"q":"Jane Doe at Acme in Manchester"}'
-```
-
-Response includes `text`, `next`, `hits` (confirmed / likely / possible), `open` (MORE links), and a `spiderdash` import payload for the iOS / Intel Hub bridge.
-
-### UI
-
-Open `http://127.0.0.1:8787` — brand + one search field + Look up. Results: printable report, confidence buckets, single **Open next**, short MORE list. Settings: case ref, HIBP / Companies House keys, deep toggle, optional SpiderFoot / BigBrother bridge URLs.
-
-## What `who()` does
-
-Parses name / `at` / `in` / email / `@user` from one string, then in parallel:
-
-1. Live-probes high-signal platforms (GET + soft-404)
-2. Guesses work emails from employer → Gravatar (+ HIBP if keyed)
-3. Companies House officers (if `COMPANIES_HOUSE_API_KEY`)
-4. Wayback on confirmed profiles
-5. Optional `deep: true` → Ahmia
-6. Returns `next` + ranked follow-up links
-
-Prefer `who()` over `findPerson` for people lookup.
+Searches run **server-side**. Each lookup is archived under `$OCROWLEY_DATA_DIR/who-archive/` (disable with `OCROWLEY_WHO_ARCHIVE=0` or `{ archive: false }`).
 
 Lawful use only. Leads ≠ evidence.

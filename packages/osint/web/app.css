@@ -231,7 +231,15 @@ body {
 .stats {
   font-size: 0.95rem;
   color: var(--ink-soft);
-  margin-bottom: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.tools,
+.archive-meta {
+  margin: 0 0 1rem;
+  font-size: 0.82rem;
+  color: var(--teal-deep);
+  line-height: 1.4;
 }
 
 .open-next {

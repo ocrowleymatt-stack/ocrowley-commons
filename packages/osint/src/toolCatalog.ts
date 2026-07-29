@@ -163,11 +163,20 @@ export const TOOL_CATALOG: ToolSpec[] = [
   {
     id: 'spiderfoot-scan',
     family: 'spiderfoot',
-    description: 'SpiderFoot scan via HTTP API bridge',
+    description: 'SpiderFoot scan via HTTP API bridge (awaits completion)',
     seedTypes: ['domain', 'ip', 'email', 'person', 'phone', 'username'],
     passive: true,
     runtime: 'bridge',
     env: ['OCROWLEY_SPIDERFOOT_URL', 'OCROWLEY_SPIDERFOOT_USER', 'OCROWLEY_SPIDERFOOT_PASS'],
+  },
+  {
+    id: 'spiderdash-bridge',
+    family: 'spiderfoot',
+    description: 'SpiderDash / Intel Hub scan+import bridge (awaits completion)',
+    seedTypes: ['person', 'email', 'username', 'domain'],
+    passive: true,
+    runtime: 'bridge',
+    env: ['OCROWLEY_SPIDERDASH_URL'],
   },
   {
     id: 'cli-maigret',

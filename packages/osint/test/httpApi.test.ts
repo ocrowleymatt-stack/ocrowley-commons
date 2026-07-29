@@ -77,6 +77,8 @@ describe('who HTTP server', () => {
 
   before(async () => {
     process.env.OCROWLEY_OSINT_CASE = 'CASE-HTTP-1';
+    process.env.OCROWLEY_OSINT_QUICK = '1'; // keep HTTP plumbing tests fast
+    process.env.OCROWLEY_WHO_ARCHIVE = '0';
     // Mock outbound OSINT probes, but let requests to this test server through.
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(typeof input === 'string' || input instanceof URL ? input : input.url);
@@ -96,6 +98,8 @@ describe('who HTTP server', () => {
 
   after(async () => {
     globalThis.fetch = originalFetch;
+    delete process.env.OCROWLEY_OSINT_QUICK;
+    delete process.env.OCROWLEY_WHO_ARCHIVE;
     await new Promise<void>((resolve, reject) => server.close(err => (err ? reject(err) : resolve())));
   });
 
@@ -128,7 +132,7 @@ describe('who HTTP server', () => {
         'Content-Type': 'application/json',
         'X-OCROWLEY-OSINT-CASE': 'CASE-HTTP-WHO',
       },
-      body: JSON.stringify({ q: 'Jane Doe at Acme in Manchester', username: 'janedoe' }),
+      body: JSON.stringify({ q: 'Jane Doe at Acme in Manchester', username: 'janedoe', full: false }),
     });
     assert.equal(res.status, 200);
     const data = await res.json();
@@ -137,7 +141,27 @@ describe('who HTTP server', () => {
     assert.ok(String(data.text).includes('WHO: Jane Doe'));
     assert.ok(Array.isArray(data.hits));
     assert.ok(Array.isArray(data.open));
+    assert.ok(Array.isArray(data.toolsUsed));
     assert.ok(data.spiderdash?.entities?.length >= 1);
+  });
+
+  it('GET /api/archive lists stored lookups when enabled', async () => {
+    process.env.OCROWLEY_WHO_ARCHIVE = '1';
+    process.env.OCROWLEY_DATA_DIR = `/tmp/ocrowley-http-arch-${Date.now()}`;
+    const res = await fetch(`${base}/api/who`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-OCROWLEY-OSINT-CASE': 'CASE-ARCH',
+      },
+      body: JSON.stringify({ q: 'Archive Me', full: false, archive: true }),
+    });
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.ok(data.archiveId);
+    const list = await fetch(`${base}/api/archive`).then(r => r.json());
+    assert.ok(list.entries.some((e: { id: string }) => e.id === data.archiveId));
+    process.env.OCROWLEY_WHO_ARCHIVE = '0';
   });
 
   it('GET /api/who/text returns printable text', async () => {
@@ -166,7 +190,7 @@ describe('who() path integration for API serialization', () => {
       process.env.OCROWLEY_OSINT_CASE = 'CASE-SER';
       const q = parseWhoInput('Ada Lovelace at Analytical in London');
       assert.equal(q.name, 'Ada Lovelace');
-      const r = await who('Ada Lovelace at Analytical in London');
+      const r = await who('Ada Lovelace at Analytical in London', { full: false, archive: false });
       const payload = serializeWhoResult(r);
       assert.equal(payload.name, 'Ada Lovelace');
       assert.ok(payload.spiderdash.entities.some(e => e.type === 'person'));

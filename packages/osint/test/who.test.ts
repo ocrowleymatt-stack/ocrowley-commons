@@ -36,13 +36,14 @@ describe('who()', () => {
 
     try {
       process.env.OCROWLEY_OSINT_CASE = 'CASE-WHO-1';
-      const r = await who('Jane Doe at Acme in Manchester', { username: 'janedoe' });
+      const r = await who('Jane Doe at Acme in Manchester', { username: 'janedoe', full: false, archive: false });
       assert.equal(r.name, 'Jane Doe');
       assert.ok(r.next.startsWith('http'));
       assert.ok(r.text.includes('WHO: Jane Doe'));
       assert.ok(r.text.includes('NEXT →'));
       assert.ok(r.open.length >= 5);
-      assert.match(await whoText('Jane Doe', { username: 'janedoe' }), /WHO:/);
+      assert.ok(r.toolsUsed.length >= 1);
+      assert.match(await whoText('Jane Doe', { username: 'janedoe', full: false, archive: false }), /WHO:/);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -53,9 +54,9 @@ describe('who()', () => {
     globalThis.fetch = (async () => new Response('page not found', { status: 404 })) as typeof fetch;
     try {
       process.env.OCROWLEY_OSINT_CASE = 'CASE-WHO-2';
-      const email = await who('someone@example.com');
+      const email = await who('someone@example.com', { full: false, archive: false });
       assert.ok(email.q.includes('@') || email.name.includes('@'));
-      const user = await who('@someuser99');
+      const user = await who('@someuser99', { full: false, archive: false });
       assert.ok(user.name.includes('someuser') || user.q.includes('someuser'));
     } finally {
       globalThis.fetch = originalFetch;
@@ -64,5 +65,30 @@ describe('who()', () => {
 
   it('rejects empty input', async () => {
     await assert.rejects(() => who(''), /pass a name/i);
+  });
+
+  it('full toolkit path merges recursive evidence and archives', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response('page not found', { status: 404 })) as typeof fetch;
+    const prevData = process.env.OCROWLEY_DATA_DIR;
+    process.env.OCROWLEY_DATA_DIR = `/tmp/ocrowley-who-test-${Date.now()}`;
+    try {
+      process.env.OCROWLEY_OSINT_CASE = 'CASE-WHO-FULL';
+      const r = await who('Ada Lovelace', {
+        username: 'adal',
+        full: true,
+        archive: true,
+        maxDiscoverSweeps: 2,
+        maxCritiqueRounds: 1,
+      });
+      assert.ok(r.toolsUsed.length >= 3);
+      assert.ok(r.recursive);
+      assert.ok(r.archiveId);
+      assert.ok(r.text.includes('TOOLS'));
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (prevData === undefined) delete process.env.OCROWLEY_DATA_DIR;
+      else process.env.OCROWLEY_DATA_DIR = prevData;
+    }
   });
 });

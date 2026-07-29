@@ -20,5 +20,7 @@ export * from './ukRecords.js';
 export * from './probeBetter.js';
 export * from './who.js';
 export * from './whoSpiderdash.js';
+export * from './whoArchive.js';
+export * from './bridgeAwait.js';
 export * from './httpApi.js';
 

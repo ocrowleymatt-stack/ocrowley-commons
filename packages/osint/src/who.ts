@@ -4,9 +4,13 @@
  *   const r = await who('Jane Doe at Acme in Manchester')
  *   console.log(r.text)   // printable
  *   console.log(r.next)   // best URL to open next
+ *
+ * By default runs the full toolkit (platforms, archive, darkweb when keyed,
+ * SpiderFoot/BigBrother/SpiderDash bridges with await-until-done, optional CLIs)
+ * plus fast people probes. Prefer who() over findPerson for the product path.
  */
 
-import { createHibpProvider, searchAhmia } from '@ocrowley/darkweb';
+import { createHibpProvider, searchAhmia, type DarkwebAuthorization } from '@ocrowley/darkweb';
 import { queryWayback } from './archive.js';
 import { looksLikeEmail, inferEntityType } from './normalize.js';
 import {
@@ -20,17 +24,18 @@ import {
 import { DEFAULT_USERNAME_PLATFORMS } from './platforms.js';
 import { assertOsintAllowed, type OsintAuthorization } from './policy.js';
 import { probeGravatar, probePeopleUsernames, probeUrlPresence } from './probeBetter.js';
+import {
+  runRecursiveOsint,
+  type OsintEvidenceItem,
+  type RecursiveOsintResult,
+} from './recursiveEngine.js';
+import { createFullDiscover, createFullEnrich, reportToolkitAvailability } from './toolkit.js';
 import { searchCompaniesHouseOfficers } from './ukRecords.js';
+import { archiveWhoResult } from './whoArchive.js';
 import { EVIDENTIAL_WARNING, REPORT_CLASSIFICATION, type PlatformProbe } from './types.js';
 
-/** High-signal platforms first — fewer probes, better hit rate. */
-const PEOPLE_PLATFORMS: PlatformProbe[] = [
-  ...DEFAULT_USERNAME_PLATFORMS.filter(p =>
-    ['GitHub', 'Twitter/X', 'Instagram', 'Reddit', 'LinkedIn', 'TikTok', 'Keybase', 'Medium', 'GitLab', 'YouTube'].includes(
-      p.site,
-    ),
-  ),
-];
+/** All catalogued platforms for maximum coverage. */
+const PEOPLE_PLATFORMS: PlatformProbe[] = [...DEFAULT_USERNAME_PLATFORMS];
 
 export interface WhoHints {
   at?: string;
@@ -41,16 +46,27 @@ export interface WhoHints {
   aka?: string | string[];
   country?: 'uk' | 'us' | 'other';
   case?: string;
-  /** Ahmia + breach paths when keys/env allow */
+  /** Ahmia + breach paths when keys/env allow (also implied by full). */
   deep?: boolean;
+  /**
+   * Use every available tool via recursive discover + critique.
+   * Default true. Pass false for fast probes-only.
+   */
+  full?: boolean;
+  /** Persist result under data/who-archive (default true). */
+  archive?: boolean;
+  maxDiscoverSweeps?: number;
+  maxCritiqueRounds?: number;
+  enableCliTools?: boolean;
 }
 
 export interface WhoHit {
-  kind: 'profile' | 'record' | 'breach' | 'darkweb' | 'gravatar' | 'email' | 'archive';
+  kind: 'profile' | 'record' | 'breach' | 'darkweb' | 'gravatar' | 'email' | 'archive' | 'tool';
   title: string;
   detail: string;
   url?: string;
   confidence: 'confirmed' | 'likely' | 'possible';
+  source?: string;
 }
 
 export interface WhoResult {
@@ -63,6 +79,15 @@ export interface WhoResult {
   stats: { confirmed: number; likely: number; possible: number; checked: number };
   text: string;
   warning: string;
+  toolsUsed: string[];
+  toolsReady: Array<{ id: string; ready: boolean; reason: string; family: string }>;
+  archiveId?: string;
+  recursive?: {
+    score: number;
+    sweeps: number;
+    evidenceCount: number;
+    stopReason: string;
+  };
 }
 
 function defaultAuth(caseRef?: string): OsintAuthorization {
@@ -136,7 +161,6 @@ export function parseWhoInput(input: string, hints: WhoHints = {}): PersonQuery 
     return { phone: text, email, username, employer, location, aliases, country: hints.country ?? 'uk' };
   }
 
-  // "Jane Doe Manchester" — last Capitalised token as location if no `in`
   const parts = text.split(/\s+/).filter(Boolean);
   let name = text;
   if (!location && parts.length >= 3) {
@@ -176,16 +200,20 @@ function formatReport(
   next: string,
   open: PersonSearchLink[],
   stats: WhoResult['stats'],
+  toolsUsed: string[],
 ): string {
   const lines: string[] = [];
   lines.push(`WHO: ${name}`);
   lines.push(REPORT_CLASSIFICATION);
   lines.push(`${stats.confirmed} confirmed · ${stats.likely} likely · ${stats.possible} possible · ${stats.checked} checked`);
+  if (toolsUsed.length) {
+    lines.push(`TOOLS · ${toolsUsed.slice(0, 24).join(', ')}${toolsUsed.length > 24 ? '…' : ''}`);
+  }
   lines.push('');
   lines.push(`NEXT → ${next}`);
   lines.push('');
 
-  const bucket = (label: string, conf: WhoHit['confidence'], max = 20) => {
+  const bucket = (label: string, conf: WhoHit['confidence'], max = 24) => {
     const list = hits.filter(h => h.confidence === conf).slice(0, max);
     if (!list.length) return;
     lines.push(label);
@@ -198,7 +226,7 @@ function formatReport(
 
   bucket('CONFIRMED', 'confirmed');
   bucket('LIKELY', 'likely');
-  bucket('POSSIBLE', 'possible', 10);
+  bucket('POSSIBLE', 'possible', 16);
 
   if (!hits.length) {
     lines.push('No live hits yet — open NEXT and work the list below.');
@@ -206,7 +234,7 @@ function formatReport(
   }
 
   lines.push('MORE');
-  for (const l of open.slice(0, 6)) {
+  for (const l of open.slice(0, 8)) {
     lines.push(`  → ${l.engine}: ${l.label}`);
     lines.push(`    ${l.url}`);
   }
@@ -227,8 +255,55 @@ function pickNext(hits: WhoHit[], open: PersonSearchLink[]): string {
   return open[0]?.url || 'https://www.google.com';
 }
 
+function confidenceFromScore(score?: number): WhoHit['confidence'] {
+  if ((score ?? 0) >= 75) return 'confirmed';
+  if ((score ?? 0) >= 55) return 'likely';
+  return 'possible';
+}
+
+function kindFromEvidence(item: OsintEvidenceItem): WhoHit['kind'] {
+  const s = item.source || '';
+  if (s.includes('platform') || s.includes('profile') || s.includes('sherlock') || s.includes('maigret')) {
+    return 'profile';
+  }
+  if (s.includes('breach') || s.includes('hibp') || s.includes('dehashed')) return 'breach';
+  if (s.includes('ahmia') || s.includes('dark')) return 'darkweb';
+  if (s.includes('wayback') || s.includes('archive')) return 'archive';
+  if (s.includes('companies-house') || s.includes('record')) return 'record';
+  if (s.includes('gravatar') || item.entity.includes('@')) return item.url ? 'gravatar' : 'email';
+  if (s === 'toolkit' || item.entity === '*') return 'tool';
+  return 'record';
+}
+
+function mergeEvidenceHits(hits: WhoHit[], evidence: OsintEvidenceItem[]): void {
+  for (const item of evidence) {
+    if (item.entity === '*' && item.source === 'toolkit') continue;
+    if (item.source === 'person-search-links') continue;
+    hits.push({
+      kind: kindFromEvidence(item),
+      title: item.title,
+      detail: item.snippet || item.source,
+      url: item.url,
+      confidence: confidenceFromScore(item.score),
+      source: item.source,
+    });
+  }
+}
+
+function extractToolsUsed(evidence: OsintEvidenceItem[], extra: string[]): string[] {
+  const set = new Set<string>(extra);
+  for (const item of evidence) {
+    if (item.source === 'toolkit' && item.snippet) {
+      for (const t of item.snippet.split(',').map(s => s.trim()).filter(Boolean)) set.add(t);
+    } else if (item.source && item.source !== 'toolkit') {
+      set.add(item.source);
+    }
+  }
+  return [...set].sort();
+}
+
 /**
- * Look someone up.
+ * Look someone up — full toolkit by default.
  *
  * @example
  * await who('Jane Doe')
@@ -236,6 +311,7 @@ function pickNext(hits: WhoHit[], open: PersonSearchLink[]): string {
  * await who('jane@acme.com')
  * await who('@janedoe')
  * await who('Jane Doe', { deep: true, case: 'CASE-42' })
+ * await who('Jane Doe', { full: false }) // fast probes only
  */
 export async function who(input: string, hints: WhoHints = {}): Promise<WhoResult> {
   if (!input?.trim()) throw new Error('who(input): pass a name, email, @username, or "Name at Org in City"');
@@ -259,42 +335,61 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
     ...(query.username ? [query.username.replace(/^@/, '')] : []),
     ...buildPersonUsernameVariants(first, last, query.aliases),
   ].filter(Boolean);
-  const uniqueVariants = [...new Set(variants)].slice(0, 6);
+  const uniqueVariants = [...new Set(variants)].slice(0, 8);
 
   const emails = [
     ...(query.email ? [query.email] : []),
     ...seeds.filter(s => s.type === 'email' && s.confidence >= 90).map(s => s.value),
     ...guessEmailPatterns(first, last, employerDomains(query.employer)),
   ];
-  const uniqueEmails = [...new Set(emails.filter(looksLikeEmail))].slice(0, 6);
+  const uniqueEmails = [...new Set(emails.filter(looksLikeEmail))].slice(0, 8);
 
+  const full =
+    hints.full !== false &&
+    process.env.OCROWLEY_OSINT_QUICK !== '1';
   const deep =
     hints.deep === true ||
+    full ||
     process.env.OCROWLEY_OSINT_DEEP === '1' ||
     process.env.OCROWLEY_OSINT_LAWFUL === '1';
 
+  const darkwebAuth: DarkwebAuthorization | undefined = deep
+    ? {
+        actorId: auth.actorId,
+        roles: auth.roles,
+        authorizationRef: auth.authorizationRef,
+        purpose: auth.purpose,
+        environment: auth.environment,
+        lawfulUseAcknowledged: true,
+      }
+    : undefined;
+
   const hits: WhoHit[] = [];
   let checked = 0;
+  const baseToolsUsed: string[] = ['username-variants', 'person-search-links'];
 
-  // Fan-out: profiles + emails + companies house + linkedin + deep — in parallel
-  const [profileHits, emailBundles, officers, linkedinPresence, darkMentions] = await Promise.all([
+  // Fast people probes (strong GET + soft-404) run in parallel with full toolkit
+  const fastProbes = Promise.all([
     probePeopleUsernames(uniqueVariants, {
-      maxUsernames: 6,
+      maxUsernames: 8,
       concurrency: 12,
       platforms: PEOPLE_PLATFORMS,
       parallelUsernames: true,
     }).then(r => {
       checked += uniqueVariants.length * PEOPLE_PLATFORMS.length;
+      baseToolsUsed.push('platform-probe');
       return r;
     }),
 
     Promise.all(
       uniqueEmails.map(async email => {
         checked += 1;
+        baseToolsUsed.push('gravatar');
         const grav = await probeGravatar(email);
         let breaches: Array<{ name: string; dataClasses?: string[] }> = [];
         if (process.env.HIBP_API_KEY) {
           checked += 1;
+          baseToolsUsed.push('hibp-breach');
           try {
             breaches = await createHibpProvider().check(email);
           } catch {
@@ -308,6 +403,7 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
     (query.country ?? 'uk') === 'uk' && displayName.includes(' ')
       ? searchCompaniesHouseOfficers(displayName).then(r => {
           checked += 1;
+          baseToolsUsed.push('companies-house');
           return r;
         })
       : Promise.resolve([]),
@@ -325,6 +421,7 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
       ? Promise.all(
           [displayName, query.email].filter(Boolean).slice(0, 2).map(async term => {
             checked += 1;
+            baseToolsUsed.push('ahmia-index');
             try {
               return await searchAhmia(term as string);
             } catch {
@@ -335,6 +432,64 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
       : Promise.resolve([]),
   ]);
 
+  let recursive: RecursiveOsintResult | undefined;
+  const toolkitOpts = {
+    auth,
+    darkwebAuth,
+    enableDarkweb: Boolean(darkwebAuth?.lawfulUseAcknowledged),
+    enableArchive: true,
+    enablePlatformProbes: true,
+    enableBridges: true,
+    enableCliTools: hints.enableCliTools === true || process.env.OCROWLEY_ENABLE_CLI_TOOLS === '1',
+    maxUsernamesPerSweep: 8,
+  };
+
+  const toolsReport = reportToolkitAvailability(toolkitOpts);
+
+  const recursivePromise = full
+    ? (async () => {
+        const discover = createFullDiscover(toolkitOpts);
+        const enrichFromCritique = createFullEnrich(toolkitOpts);
+        const openLinks = buildPersonSearchLinks(query, displayName);
+        const peopleDiscover = async (
+          activeSeeds: typeof seeds,
+          sweep: number,
+        ) => {
+          const base = await discover(activeSeeds, sweep);
+          if (sweep === 1) {
+            for (const link of openLinks.slice(0, 12)) {
+              base.items.push({
+                key: `searchlink:${link.engine}:${link.label}`,
+                entity: displayName,
+                title: `${link.engine}: ${link.label}`,
+                source: 'person-search-links',
+                snippet: link.url,
+                url: link.url,
+                score: 40,
+              });
+              base.itemKeys.push(`searchlink:${link.engine}:${link.label}`);
+            }
+          }
+          return base;
+        };
+        return runRecursiveOsint({
+          auth,
+          initialSeeds: seeds,
+          discover: peopleDiscover,
+          enrichFromCritique,
+          toolkit: toolkitOpts,
+          useFullToolkit: false,
+          maxDiscoverSweeps: hints.maxDiscoverSweeps ?? Number(process.env.OCROWLEY_WHO_SWEEPS || 5),
+          maxCritiqueRounds: hints.maxCritiqueRounds ?? Number(process.env.OCROWLEY_WHO_CRITIQUE || 3),
+          targetScore: Number(process.env.OCROWLEY_WHO_TARGET_SCORE || 78),
+        });
+      })()
+    : Promise.resolve(undefined);
+
+  const [[profileHits, emailBundles, officers, linkedinPresence, darkMentions], recursiveResult] =
+    await Promise.all([fastProbes, recursivePromise]);
+  recursive = recursiveResult;
+
   for (const p of profileHits) {
     hits.push({
       kind: 'profile',
@@ -342,6 +497,7 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
       detail: 'Live profile',
       url: p.url,
       confidence: 'confirmed',
+      source: 'platform-probe',
     });
   }
 
@@ -354,6 +510,7 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
         detail: provided ? 'Avatar registered' : 'Guessed work email + avatar',
         url: grav.url,
         confidence: 'confirmed',
+        source: 'gravatar',
       });
     } else if (provided) {
       hits.push({
@@ -361,6 +518,7 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
         title: `Email · ${email}`,
         detail: 'Provided (delivery not verified)',
         confidence: 'likely',
+        source: 'query',
       });
     }
     for (const b of breaches.slice(0, 8)) {
@@ -369,6 +527,7 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
         title: `Breach · ${b.name}`,
         detail: (b.dataClasses || []).slice(0, 6).join(', ') || email,
         confidence: 'confirmed',
+        source: 'hibp-breach',
       });
     }
   }
@@ -380,6 +539,7 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
       detail: o.companyName || 'Officer match',
       url: o.url,
       confidence: process.env.COMPANIES_HOUSE_API_KEY ? 'confirmed' : 'possible',
+      source: 'companies-house',
     });
   }
 
@@ -390,6 +550,7 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
       detail: 'Profile URL responded',
       url: linkedinPresence.url,
       confidence: 'likely',
+      source: 'linkedin-slug',
     });
   }
 
@@ -400,12 +561,19 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
       detail: m.description || displayName,
       url: m.url || m.onionUrl,
       confidence: 'possible',
+      source: 'ahmia-index',
     });
   }
 
-  // Wayback on top confirmed profile URLs (archive corroboration)
-  const topUrls = hits.filter(h => h.confidence === 'confirmed' && h.url).slice(0, 3);
+  if (recursive?.evidence?.length) {
+    mergeEvidenceHits(hits, recursive.evidence);
+    checked += recursive.evidence.length;
+  }
+
+  // Wayback on top confirmed profile URLs
+  const topUrls = hits.filter(h => h.confidence === 'confirmed' && h.url).slice(0, 4);
   if (topUrls.length) {
+    baseToolsUsed.push('wayback-cdx');
     const archives = await Promise.all(
       topUrls.map(async h => {
         checked += 1;
@@ -425,6 +593,7 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
         detail: a.art.timestamp ? `Snapshot ${a.art.timestamp}` : 'Archived copy',
         url: a.art.archiveUrl,
         confidence: 'likely',
+        source: 'wayback-cdx',
       });
     }
   }
@@ -444,6 +613,7 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
   });
 
   const next = pickNext(deduped, open);
+  const toolsUsed = extractToolsUsed(recursive?.evidence || [], baseToolsUsed);
   const stats = {
     confirmed: deduped.filter(h => h.confidence === 'confirmed').length,
     likely: deduped.filter(h => h.confidence === 'likely').length,
@@ -451,16 +621,38 @@ export async function who(input: string, hints: WhoHints = {}): Promise<WhoResul
     checked,
   };
 
-  return {
+  const result: WhoResult = {
     q: input.trim(),
     name: displayName,
     hits: deduped,
     next,
     open,
     stats,
-    text: formatReport(displayName, deduped, next, open, stats),
+    text: formatReport(displayName, deduped, next, open, stats, toolsUsed),
     warning: EVIDENTIAL_WARNING,
+    toolsUsed,
+    toolsReady: toolsReport.tools,
+    recursive: recursive
+      ? {
+          score: recursive.brief.score,
+          sweeps: recursive.discovery.totalSweeps,
+          evidenceCount: recursive.evidence.length,
+          stopReason: recursive.brief.stopReason,
+        }
+      : undefined,
   };
+
+  const shouldArchive = hints.archive !== false && process.env.OCROWLEY_WHO_ARCHIVE !== '0';
+  if (shouldArchive) {
+    try {
+      const entry = await archiveWhoResult(result, auth.authorizationRef);
+      result.archiveId = entry.id;
+    } catch {
+      /* best-effort archive */
+    }
+  }
+
+  return result;
 }
 
 export async function whoText(input: string, hints?: WhoHints): Promise<string> {

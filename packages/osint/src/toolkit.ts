@@ -12,6 +12,7 @@ import {
   type DarkwebAuthorization,
 } from '@ocrowley/darkweb';
 import { queryWayback } from './archive.js';
+import { runAwaitableBridge, bridgeTimeoutMs } from './bridgeAwait.js';
 import { detectExactDuplicates } from './dedup.js';
 import { buildUsernameVariants, inferEntityType } from './normalize.js';
 import { probeUsernamePlatforms } from './platforms.js';
@@ -80,25 +81,19 @@ function pushItem(
   keys.push(item.key);
 }
 
-async function runBridgeJson(
+async function runBridgeScanAndWait(
   baseEnv: string,
-  path: string,
+  startPath: string,
   body: unknown,
-): Promise<unknown | null> {
+): Promise<Record<string, unknown> | null> {
   const base = process.env[baseEnv];
   if (!base) return null;
-  try {
-    const res = await fetch(`${base.replace(/\/$/, '')}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(20000),
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
+  return runAwaitableBridge({
+    baseUrl: base,
+    startPath,
+    body,
+    timeoutMs: bridgeTimeoutMs(),
+  });
 }
 
 async function runCliTool(
@@ -314,7 +309,8 @@ export function createFullDiscover(opts: ToolkitOptions) {
         if (process.env.INTELX_API_KEY) {
           usedTools.push('intelx-search');
           for (const e of emails.slice(0, 2)) {
-            const ix = await searchIntelX(e.value, { settleMs: 500 });
+            const settleMs = Number(process.env.OCROWLEY_INTELX_SETTLE_MS || 4000);
+            const ix = await searchIntelX(e.value, { settleMs });
             for (const rec of ix.results.slice(0, 5)) {
               pushItem(
                 items,
@@ -335,35 +331,87 @@ export function createFullDiscover(opts: ToolkitOptions) {
       }
     }
 
-    // BigBrother / SpiderFoot HTTP bridges
+    // BigBrother / SpiderFoot / SpiderDash HTTP bridges — await until finished
     if (enableBridges) {
-      const bb = await runBridgeJson('OCROWLEY_BIGBROTHER_BRIDGE', '/scan', {
+      const bb = await runBridgeScanAndWait('OCROWLEY_BIGBROTHER_BRIDGE', '/scan', {
         seeds,
         sweepNumber,
         authorizationRef: opts.auth.authorizationRef,
       });
-      if (bb && typeof bb === 'object') {
+      if (bb) {
         usedTools.push('bb-bridge');
         const payload = bb as { items?: OsintEvidenceItem[]; seeds?: RefinementSeed[] };
         for (const item of payload.items ?? []) pushItem(items, itemKeys, item, seen);
         for (const seed of payload.seeds ?? []) discoveredSeeds.push(seed);
       }
 
-      const sf = await runBridgeJson('OCROWLEY_SPIDERFOOT_URL', '/api/scan', {
+      const sf = await runBridgeScanAndWait('OCROWLEY_SPIDERFOOT_URL', '/api/scan', {
         seeds,
         sweepNumber,
+        authorizationRef: opts.auth.authorizationRef,
       });
-      if (sf && typeof sf === 'object') {
+      if (sf) {
         usedTools.push('spiderfoot-scan');
-        const payload = sf as { items?: OsintEvidenceItem[]; seeds?: RefinementSeed[] };
-        for (const item of payload.items ?? []) pushItem(items, itemKeys, item, seen);
+        const payload = sf as {
+          items?: OsintEvidenceItem[];
+          seeds?: RefinementSeed[];
+          results?: OsintEvidenceItem[];
+        };
+        for (const item of [...(payload.items ?? []), ...(payload.results ?? [])]) {
+          pushItem(items, itemKeys, item, seen);
+        }
         for (const seed of payload.seeds ?? []) discoveredSeeds.push(seed);
+      }
+
+      if (process.env.OCROWLEY_SPIDERDASH_URL) {
+        const dash =
+          (await runBridgeScanAndWait('OCROWLEY_SPIDERDASH_URL', '/api/scan', {
+            seeds,
+            sweepNumber,
+            authorizationRef: opts.auth.authorizationRef,
+            source: 'ocrowley-who',
+          })) ||
+          (await runBridgeScanAndWait('OCROWLEY_SPIDERDASH_URL', '/api/intel/import', {
+            seeds,
+            sweepNumber,
+            authorizationRef: opts.auth.authorizationRef,
+            source: 'ocrowley-who',
+          }));
+        if (dash) {
+          usedTools.push('spiderdash-bridge');
+          const payload = dash as {
+            items?: OsintEvidenceItem[];
+            entities?: Array<{ type: string; value: string; notes?: string }>;
+            seeds?: RefinementSeed[];
+          };
+          for (const item of payload.items ?? []) pushItem(items, itemKeys, item, seen);
+          for (const ent of payload.entities ?? []) {
+            pushItem(
+              items,
+              itemKeys,
+              {
+                key: `spiderdash:${ent.type}:${ent.value}`,
+                entity: ent.value,
+                title: `SpiderDash · ${ent.type}`,
+                source: 'spiderdash-bridge',
+                snippet: ent.notes || ent.value,
+                score: 68,
+              },
+              seen,
+            );
+          }
+          for (const seed of payload.seeds ?? []) discoveredSeeds.push(seed);
+        }
       }
     }
 
     // CLI bridges
     for (const s of seeds.filter(x => x.type === 'username').slice(0, 2)) {
-      const sherlockOut = await runCliTool('sherlock', [s.value, '--print-found', '--no-color', '--timeout', '6'], enableCli);
+      const sherlockOut = await runCliTool(
+        'sherlock',
+        [s.value, '--print-found', '--no-color', '--timeout', '12'],
+        enableCli,
+      );
       if (sherlockOut) {
         usedTools.push('cli-sherlock');
         pushItem(
