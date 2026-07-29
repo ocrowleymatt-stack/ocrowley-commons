@@ -8,7 +8,11 @@ COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages ./packages
 COPY python/ocrowley_osint ./python/ocrowley_osint
 RUN npm ci
-RUN npm run build -w @ocrowley/policy -w @ocrowley/darkweb -w @ocrowley/osint
+# Build in dependency order — npm -w A -w B runs workspaces in parallel.
+# Force emit: host tsbuildinfo must not be present (see .dockerignore).
+RUN npm run build -w @ocrowley/policy \
+  && npm run build -w @ocrowley/darkweb \
+  && npm run build -w @ocrowley/osint
 RUN pip3 install --break-system-packages -e ./python/ocrowley_osint
 
 FROM node:22-bookworm-slim AS who
