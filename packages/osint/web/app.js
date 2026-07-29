@@ -1,6 +1,12 @@
 const STORAGE_KEY = 'ocrowley-who-settings';
+const PIN_SESSION_KEY = 'ocrowley-who-pin';
 
 const els = {
+  pinForm: document.getElementById('pin-form'),
+  pin: document.getElementById('pin'),
+  pinError: document.getElementById('pin-error'),
+  viewPin: document.getElementById('view-pin'),
+  appShell: document.getElementById('app-shell'),
   form: document.getElementById('who-form'),
   q: document.getElementById('q'),
   btnLookup: document.getElementById('btn-lookup'),
@@ -17,6 +23,7 @@ const els = {
   btnBack: document.getElementById('btn-back'),
   btnPrint: document.getElementById('btn-print'),
   btnSettings: document.getElementById('btn-settings'),
+  btnLock: document.getElementById('btn-lock'),
   dialog: document.getElementById('settings-dialog'),
   settingsForm: document.getElementById('settings-form'),
   btnCloseSettings: document.getElementById('btn-close-settings'),
@@ -47,10 +54,24 @@ function saveLocalSettings(partial) {
   return next;
 }
 
+function getSessionPin() {
+  return sessionStorage.getItem(PIN_SESSION_KEY) || '';
+}
+
+function setSessionPin(pin) {
+  sessionStorage.setItem(PIN_SESSION_KEY, pin);
+}
+
+function clearSessionPin() {
+  sessionStorage.removeItem(PIN_SESSION_KEY);
+}
+
 async function api(path, options = {}) {
   const local = loadLocalSettings();
+  const sessionPin = getSessionPin();
   const headers = {
     'Content-Type': 'application/json',
+    ...(sessionPin ? { 'X-OCROWLEY-WHO-PIN': sessionPin } : {}),
     ...(options.headers || {}),
   };
   if (local.caseRef) headers['X-OCROWLEY-OSINT-CASE'] = local.caseRef;
@@ -59,9 +80,49 @@ async function api(path, options = {}) {
   const data = ct.includes('application/json') ? await res.json() : await res.text();
   if (!res.ok) {
     const msg = typeof data === 'object' && data?.error ? data.error : String(data);
+    if (res.status === 401 && path !== '/api/unlock' && /PIN/i.test(msg)) {
+      lockApp('PIN required');
+    }
     throw new Error(msg);
   }
   return data;
+}
+
+function unlockApp() {
+  document.body.classList.remove('locked');
+  els.viewPin.hidden = true;
+  els.appShell.hidden = false;
+  els.pinError.hidden = true;
+  els.q?.focus();
+}
+
+function lockApp(message) {
+  clearSessionPin();
+  document.body.classList.add('locked');
+  els.appShell.hidden = true;
+  els.viewPin.hidden = false;
+  els.viewResults.hidden = true;
+  els.btnPrint.hidden = true;
+  if (message) {
+    els.pinError.hidden = false;
+    els.pinError.textContent = message;
+  } else {
+    els.pinError.hidden = true;
+  }
+  els.pin.value = '';
+  els.pin.focus();
+}
+
+async function tryUnlock(pin) {
+  const data = await api('/api/unlock', {
+    method: 'POST',
+    body: JSON.stringify({ pin }),
+    headers: { 'X-OCROWLEY-WHO-PIN': pin },
+  });
+  if (!data.ok) throw new Error('Invalid PIN');
+  setSessionPin(pin);
+  unlockApp();
+  await hydrateSettingsForm();
 }
 
 async function hydrateSettingsForm() {
@@ -70,7 +131,7 @@ async function hydrateSettingsForm() {
   try {
     remote = await api('/api/settings');
   } catch {
-    /* offline / first paint */
+    /* offline / locked */
   }
   els.setCase.value = local.caseRef || remote.caseRef || '';
   els.setDeep.checked = local.deep ?? remote.deep ?? true;
@@ -159,6 +220,20 @@ function showSearch() {
   els.q.focus();
 }
 
+els.pinForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const pin = els.pin.value.trim();
+  if (!pin) return;
+  els.pinError.hidden = true;
+  try {
+    await tryUnlock(pin);
+  } catch {
+    els.pinError.hidden = false;
+    els.pinError.textContent = 'Incorrect PIN';
+    els.pin.select();
+  }
+});
+
 els.form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const q = els.q.value.trim();
@@ -193,6 +268,7 @@ els.form.addEventListener('submit', async (e) => {
 
 els.btnBack.addEventListener('click', showSearch);
 els.btnPrint.addEventListener('click', () => window.print());
+els.btnLock.addEventListener('click', () => lockApp());
 els.btnSettings.addEventListener('click', async () => {
   await hydrateSettingsForm();
   els.dialog.showModal();
@@ -240,4 +316,16 @@ if (!localStorage.getItem(STORAGE_KEY)) {
   });
 }
 
-hydrateSettingsForm().catch(() => {});
+// Resume session if PIN already unlocked this tab
+(async () => {
+  const existing = getSessionPin();
+  if (!existing) {
+    lockApp();
+    return;
+  }
+  try {
+    await tryUnlock(existing);
+  } catch {
+    lockApp();
+  }
+})();

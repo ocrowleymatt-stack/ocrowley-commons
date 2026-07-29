@@ -4,6 +4,8 @@ set -euo pipefail
 
 BASE="${OCROWLEY_WHO_SMOKE_URL:-http://127.0.0.1:8787}"
 CASE="${OCROWLEY_OSINT_CASE:-CASE-SMOKE}"
+PIN="${OCROWLEY_WHO_PIN:-3123}"
+PIN_HDR="X-OCROWLEY-WHO-PIN: $PIN"
 
 fail() { echo "FAIL: $1"; exit 1; }
 ok() { echo "OK: $1"; }
@@ -13,16 +15,34 @@ echo "WHO smoke against $BASE (case=$CASE)"
 curl -sf "$BASE/api/health" | grep -q '"ok": true\|"ok":true' || fail "/api/health"
 ok "/api/health"
 
-curl -sf "$BASE/api/settings" | grep -q 'caseRef\|spiderdashUrl' || fail "/api/settings"
+# PIN gate — wrong pin rejected; unlock + header accepted
+CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/unlock" \
+  -H 'Content-Type: application/json' \
+  -d '{"pin":"0000"}')
+[[ "$CODE" == "401" ]] || fail "/api/unlock wrong pin should 401 (got $CODE)"
+ok "/api/unlock reject"
+
+CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/unlock" \
+  -H 'Content-Type: application/json' \
+  -d "{\"pin\":\"$PIN\"}")
+[[ "$CODE" == "200" ]] || fail "/api/unlock status=$CODE"
+ok "/api/unlock"
+
+CODE=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/settings")
+[[ "$CODE" == "401" ]] || fail "/api/settings without PIN should 401 (got $CODE)"
+ok "/api/settings PIN gate"
+
+curl -sf -H "$PIN_HDR" "$BASE/api/settings" | grep -q 'caseRef\|spiderdashUrl' || fail "/api/settings"
 ok "/api/settings"
 
-curl -sf "$BASE/" | grep -q 'OCROWLEY' || fail "web shell"
+curl -sf "$BASE/" | grep -q 'pin-form\|OCROWLEY' || fail "web shell"
 ok "web shell"
 
-# Quick lookup (probes only) — must auth
+# Quick lookup (probes only) — must auth with case + PIN
 CODE=$(curl -s -o /tmp/who-smoke.json -w '%{http_code}' -X POST "$BASE/api/who" \
   -H 'Content-Type: application/json' \
   -H "X-OCROWLEY-OSINT-CASE: $CASE" \
+  -H "$PIN_HDR" \
   -d '{"q":"Jane Doe","full":false,"archive":true}')
 [[ "$CODE" == "200" ]] || fail "/api/who status=$CODE"
 grep -q '"name"' /tmp/who-smoke.json || fail "/api/who body"
@@ -33,11 +53,12 @@ ok "/api/who"
 CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/who" \
   -H 'Content-Type: application/json' \
   -H "X-OCROWLEY-OSINT-CASE: $CASE" \
+  -H "$PIN_HDR" \
   -d '{"q":""}')
 [[ "$CODE" == "400" ]] || fail "/api/who empty should 400 (got $CODE)"
 ok "/api/who validation"
 
-curl -sf "$BASE/api/archive?limit=5" | grep -q 'entries' || fail "/api/archive"
+curl -sf -H "$PIN_HDR" "$BASE/api/archive?limit=5" | grep -q 'entries' || fail "/api/archive"
 ok "/api/archive"
 
 echo ""

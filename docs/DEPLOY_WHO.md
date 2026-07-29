@@ -13,7 +13,7 @@ Private deploy of the **OCROWLEY · WHO** API + web shell, with a BigBrother sid
 
 ```bash
 cp deploy/who/.env.example deploy/who/.env
-# edit OCROWLEY_OSINT_CASE and any API keys
+# edit OCROWLEY_OSINT_CASE, OCROWLEY_WHO_PIN (default 3123), and any API keys
 
 docker compose -f deploy/who/docker-compose.yml --env-file deploy/who/.env up -d --build
 
@@ -21,10 +21,10 @@ docker compose -f deploy/who/docker-compose.yml --env-file deploy/who/.env up -d
 curl -sS http://127.0.0.1:8787/api/health | jq .
 
 # smoke
-OCROWLEY_OSINT_CASE=CASE-PROD-1 bash packages/osint/scripts/who-smoke.sh
+OCROWLEY_OSINT_CASE=CASE-PROD-1 OCROWLEY_WHO_PIN=3123 bash packages/osint/scripts/who-smoke.sh
 ```
 
-Open `http://127.0.0.1:8787` — set the same case in Settings, then Look up.
+Open `http://127.0.0.1:8787` — enter PIN (default `3123`), set the same case in Settings, then Look up.
 
 ### Services
 
@@ -50,6 +50,7 @@ npm run who:server                 # auto-starts BB on :8798 when possible
 ## Production checklist
 
 - [ ] `OCROWLEY_OSINT_CASE` set (non-default, real case ref)
+- [ ] `OCROWLEY_WHO_PIN` set (change from default `3123` in real deploys)
 - [ ] TLS terminator in front (Caddy / nginx / Cloudflare) — app speaks HTTP
 - [ ] Restrict who can reach `:8787` (VPN / IP allowlist / basic auth at edge)
 - [ ] Keep BigBrother on private network only (compose already does this)

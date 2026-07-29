@@ -1,6 +1,7 @@
 /**
  * Thin HTTP API over who() / whoText for SpiderDash and the local WHO web shell.
  *
+ * Gate: PIN (default 3123 via OCROWLEY_WHO_PIN) on API routes except health/unlock.
  * Case auth: X-OCROWLEY-OSINT-CASE header, body/query `case`, or OCROWLEY_OSINT_CASE env.
  * Default-deny when no case reference is present.
  */
@@ -48,6 +49,37 @@ export interface WhoHttpServerOptions {
   webRoot?: string;
   /** When true, allow missing case in development only if OCROWLEY_OSINT_CASE is set. */
   requireCase?: boolean;
+  /** Access PIN (defaults to OCROWLEY_WHO_PIN or 3123). */
+  pin?: string;
+  /** When false, skip PIN checks (tests only). Default true. */
+  requirePin?: boolean;
+}
+
+/** Access PIN for the WHO shell + API. Override with OCROWLEY_WHO_PIN. */
+export function configuredWhoPin(explicit?: string): string {
+  return String(explicit || process.env.OCROWLEY_WHO_PIN || '3123').trim();
+}
+
+export function extractWhoPin(
+  headers: IncomingMessage['headers'],
+  bodyPin?: string,
+): string {
+  const header = headerValue(headers['x-ocrowley-who-pin']);
+  if (header) return header.trim();
+  const cookie = headerValue(headers.cookie);
+  const m = cookie.match(/(?:^|;\s*)ocrowley_who_pin=([^;]+)/);
+  if (m?.[1]) return decodeURIComponent(m[1]).trim();
+  return String(bodyPin || '').trim();
+}
+
+export function pinAuthorized(
+  headers: IncomingMessage['headers'],
+  bodyPin?: string,
+  expected?: string,
+): boolean {
+  const got = extractWhoPin(headers, bodyPin);
+  const want = configuredWhoPin(expected);
+  return Boolean(want) && got === want;
 }
 
 const SETTINGS_ENV = [
@@ -232,7 +264,7 @@ function sendJson(res: ServerResponse, status: number, data: unknown): void {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-OCROWLEY-OSINT-CASE',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-OCROWLEY-OSINT-CASE, X-OCROWLEY-WHO-PIN',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
   });
   res.end(body);
@@ -301,6 +333,8 @@ export type WhoHandler = (req: IncomingMessage, res: ServerResponse) => Promise<
 export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler {
   const webRoot = opts.webRoot || path.resolve(__dirname, '../web');
   const requireCase = opts.requireCase !== false;
+  const requirePin = opts.requirePin !== false;
+  const pin = configuredWhoPin(opts.pin);
 
   return async (req, res) => {
     const method = (req.method || 'GET').toUpperCase();
@@ -310,7 +344,8 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
     if (method === 'OPTIONS') {
       res.writeHead(204, {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-OCROWLEY-OSINT-CASE',
+        'Access-Control-Allow-Headers':
+          'Content-Type, Authorization, X-OCROWLEY-OSINT-CASE, X-OCROWLEY-WHO-PIN',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
       });
       res.end();
@@ -324,6 +359,7 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
         sendJson(res, 200, {
           ok: true,
           service: 'ocrowley-who',
+          pinRequired: requirePin,
           caseConfigured: Boolean(process.env.OCROWLEY_OSINT_CASE?.trim()),
           bridges: {
             spiderdash: resolveSpiderdashUrl(),
@@ -332,6 +368,32 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
             bigbrotherReady: bb.ok,
             bigbrotherAvailable: bb.bigbrotherAvailable,
           },
+        });
+        return;
+      }
+
+      if (pathname === '/api/unlock' && method === 'POST') {
+        const body = await readJsonBody(req);
+        const candidate = extractWhoPin(req.headers, (body as { pin?: string }).pin);
+        if (!requirePin || candidate === pin) {
+          res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'Access-Control-Allow-Origin': '*',
+            'Set-Cookie': `ocrowley_who_pin=${encodeURIComponent(pin)}; Path=/; SameSite=Strict; HttpOnly`,
+          });
+          res.end(JSON.stringify({ ok: true, unlocked: true }));
+          return;
+        }
+        sendJson(res, 401, { error: 'Invalid PIN', unlocked: false });
+        return;
+      }
+
+      const apiPath = pathname.startsWith('/api/');
+      if (apiPath && requirePin && !pinAuthorized(req.headers, undefined, pin)) {
+        sendJson(res, 401, {
+          error: 'PIN required',
+          hint: 'Unlock via POST /api/unlock { "pin": "…" } or send X-OCROWLEY-WHO-PIN',
         });
         return;
       }
