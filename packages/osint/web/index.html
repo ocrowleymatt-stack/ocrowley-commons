@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OCROWLEY · WHO</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Outfit:wght@300;400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <header class="topbar">
+      <button type="button" class="ghost" id="btn-settings" aria-label="Settings">Settings</button>
+      <button type="button" class="ghost" id="btn-print" hidden>Print report</button>
+    </header>
+
+    <main id="view-search" class="hero">
+      <p class="brand">OCROWLEY</p>
+      <h1 class="product">WHO</h1>
+      <p class="tagline">Look someone up. Lawful use only — leads are not evidence.</p>
+      <form id="who-form" class="search-form" autocomplete="off">
+        <label class="sr-only" for="q">Person query</label>
+        <input
+          id="q"
+          name="q"
+          type="search"
+          placeholder='Jane Doe at Acme in Manchester'
+          required
+          autofocus
+        />
+        <button type="submit" id="btn-lookup">Look up</button>
+      </form>
+      <p class="hint">Name · at Org · in City · email · @username</p>
+    </main>
+
+    <section id="view-results" class="results" hidden>
+      <div class="results-head">
+        <button type="button" class="ghost" id="btn-back">← New search</button>
+        <p class="brand-mini">OCROWLEY · WHO</p>
+      </div>
+      <div class="stats" id="stats"></div>
+      <a class="open-next" id="open-next" href="#" target="_blank" rel="noopener">Open next</a>
+      <pre class="report" id="report"></pre>
+      <div class="hits" id="hits"></div>
+      <div class="more">
+        <h2>More</h2>
+        <ul id="more-links"></ul>
+      </div>
+      <p class="warning" id="warning"></p>
+    </section>
+
+    <dialog id="settings-dialog">
+      <form method="dialog" id="settings-form" class="settings">
+        <h2>Settings</h2>
+        <p class="settings-lead">Case auth stays default-deny. Keys stay on this machine.</p>
+
+        <label>
+          Case ref
+          <input id="set-case" name="caseRef" placeholder="OCROWLEY_OSINT_CASE" required />
+        </label>
+        <label class="row">
+          <input id="set-deep" name="deep" type="checkbox" />
+          Deep (Ahmia / extra paths when available)
+        </label>
+        <label>
+          HIBP API key
+          <input id="set-hibp" name="hibpApiKey" type="password" autocomplete="off" placeholder="leave blank to keep" />
+        </label>
+        <label>
+          Companies House key
+          <input
+            id="set-ch"
+            name="companiesHouseApiKey"
+            type="password"
+            autocomplete="off"
+            placeholder="leave blank to keep"
+          />
+        </label>
+        <label>
+          SpiderFoot bridge URL
+          <input id="set-sf" name="spiderfootUrl" type="url" placeholder="https://…" />
+        </label>
+        <label>
+          BigBrother bridge URL
+          <input id="set-bb" name="bigbrotherBridgeUrl" type="url" placeholder="https://… (bridge only)" />
+        </label>
+        <p class="settings-status" id="settings-status"></p>
+        <div class="settings-actions">
+          <button type="submit" value="save" id="btn-save-settings">Save</button>
+          <button type="button" class="ghost" id="btn-close-settings">Close</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

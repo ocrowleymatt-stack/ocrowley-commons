@@ -14,16 +14,20 @@
   "files": [
     "dist",
     "src",
+    "web",
+    "bin",
     "README.md"
   ],
   "bin": {
-    "ocrowley-who": "./bin/who.mjs"
+    "ocrowley-who": "./bin/who.mjs",
+    "ocrowley-who-server": "./bin/who-server.mjs"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "node --import tsx --test test/*.test.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "who": "node ./bin/who.mjs"
+    "who": "node ./bin/who.mjs",
+    "who:server": "node ./bin/who-server.mjs"
   },
   "dependencies": {
     "@ocrowley/policy": "0.1.0",

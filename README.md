@@ -24,8 +24,19 @@ Shared library foundation extracted from the ocrowleymatt-stack repositories.
 | `@ocrowley/audit` | Hash-chained tamper-evident ledger (Mn) |
 | `@ocrowley/coherence` | Narrative psych/craft/accuracy libraries |
 | `@ocrowley/literary-rules` | Literary engine standing rules |
-| `@ocrowley/osint` | Entity/dossier/scan contracts, stylometry, geo cluster, archive, OSINT policy |
+| `@ocrowley/osint` | `who()` people lookup, dossier/scan contracts, WHO HTTP API + web shell, SpiderDash bridges |
 | `@ocrowley/darkweb` | Clearnet Tor-index (Ahmia) + breach adapters with authorization gates |
+
+## People OSINT (WHO)
+
+```bash
+npm install && npm run build -w @ocrowley/osint
+export OCROWLEY_OSINT_CASE=CASE-1   # required (default-deny)
+npm run who:server -w @ocrowley/osint
+# open http://127.0.0.1:8787  — brand + one search field
+```
+
+Prefer SpiderDash when attached; commons ships the thin `who()` API + minimal UI. See [packages/osint/README.md](packages/osint/README.md).
 
 ## Packages (Python)
 
