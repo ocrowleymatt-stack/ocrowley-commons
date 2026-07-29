@@ -13,7 +13,10 @@
     "test:ai-client": "npm run test -w @ocrowley/ai-client",
     "test:intent": "npm run test -w @ocrowley/intent",
     "who:server": "npm run who:server -w @ocrowley/osint",
-    "bb:bridge": "PYTHONPATH=python/ocrowley_osint python3 -m ocrowley_osint --port 8798"
+    "bb:bridge": "PYTHONPATH=python/ocrowley_osint python3 -m ocrowley_osint --port 8798",
+    "who:smoke": "bash packages/osint/scripts/who-smoke.sh",
+    "who:up": "docker compose -f deploy/who/docker-compose.yml --env-file deploy/who/.env up -d --build",
+    "who:down": "docker compose -f deploy/who/docker-compose.yml down"
   },
   "engines": {
     "node": ">=20"
