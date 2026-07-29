@@ -32,13 +32,6 @@ layer2=(
   @ocrowley/osint
 )
 
-build_one() {
-  local w="$1"
-  if [[ -f "packages/${w#@ocrowley/}/package.json" ]] || npm pkg get "workspaces" >/dev/null 2>&1; then
-    npm run build -w "$w" --if-present
-  fi
-}
-
 for w in "${layer0[@]}" "${layer1[@]}" "${layer2[@]}"; do
   echo "==> build $w"
   npm run build -w "$w" --if-present
