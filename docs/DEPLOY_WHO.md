@@ -31,7 +31,7 @@ Open `http://127.0.0.1:8787` — enter PIN (default `3123`), set the same case i
 | Service | Port | Notes |
 |---------|------|--------|
 | `who` | host `8787` → container `8787` | API + static UI; binds `0.0.0.0` |
-| `bb` | internal `8798` only | BigBrother bridge — **not published** |
+| `bb` | internal `8798` only | Sidecar on WHO’s network namespace (`127.0.0.1:8798`) — **not published** |
 
 Archive data persists in volume `who-data` → `/data/who-archive`.
 
