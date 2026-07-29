@@ -319,10 +319,19 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
 
     try {
       if (pathname === '/api/health' && method === 'GET') {
+        const { pingBigBrotherBridge } = await import('./bigbrotherBridge.js');
+        const bb = await pingBigBrotherBridge();
         sendJson(res, 200, {
           ok: true,
           service: 'ocrowley-who',
           caseConfigured: Boolean(process.env.OCROWLEY_OSINT_CASE?.trim()),
+          bridges: {
+            spiderdash: resolveSpiderdashUrl(),
+            spiderfoot: resolveSpiderfootUrl(),
+            bigbrother: resolveBigbrotherUrl(),
+            bigbrotherReady: bb.ok,
+            bigbrotherAvailable: bb.bigbrotherAvailable,
+          },
         });
         return;
       }

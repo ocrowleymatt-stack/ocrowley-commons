@@ -1,6 +1,8 @@
 /**
- * Known hosted bridge endpoints for the Ocrowley stack.
+ * Known hosted / private bridge endpoints for the Ocrowley stack.
  * Env vars always win; these fill gaps so WHO is powerful out of the box.
+ *
+ * BigBrother is for private/authorised use only — not for resale productisation.
  */
 
 /** ARCANUM / SpiderDash product shell (Manus). */
@@ -12,8 +14,12 @@ export const SPIDERDASH_DEFAULT_URL = 'https://spiderdash-mbpjlxnq.manus.space';
  */
 export const SPIDERFOOT_DEFAULT_URL = 'http://165.227.237.155:5001';
 
-/** Optional BigBrother HTTP bridge — no public default (do not vendor the scanners). */
-export const BIGBROTHER_DEFAULT_URL = '';
+/**
+ * Private BigBrother HTTP bridge (local sidecar).
+ * Start with: `python -m ocrowley_osint --port 8798`
+ * (who:server will auto-start it when possible)
+ */
+export const BIGBROTHER_DEFAULT_URL = 'http://127.0.0.1:8798';
 
 export function resolveSpiderdashUrl(explicit?: string): string {
   return (
@@ -51,12 +57,12 @@ export function applyBridgeUrlDefaults(): {
   if (!process.env.OCROWLEY_SPIDERFOOT_URL?.trim()) {
     process.env.OCROWLEY_SPIDERFOOT_URL = SPIDERFOOT_DEFAULT_URL;
   }
-  if (!process.env.OCROWLEY_BIGBROTHER_BRIDGE?.trim() && BIGBROTHER_DEFAULT_URL) {
+  if (!process.env.OCROWLEY_BIGBROTHER_BRIDGE?.trim()) {
     process.env.OCROWLEY_BIGBROTHER_BRIDGE = BIGBROTHER_DEFAULT_URL;
   }
   return {
     spiderdashUrl: process.env.OCROWLEY_SPIDERDASH_URL,
     spiderfootUrl: process.env.OCROWLEY_SPIDERFOOT_URL,
-    bigbrotherBridgeUrl: process.env.OCROWLEY_BIGBROTHER_BRIDGE || '',
+    bigbrotherBridgeUrl: process.env.OCROWLEY_BIGBROTHER_BRIDGE,
   };
 }

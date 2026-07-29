@@ -75,7 +75,15 @@ Searches run **server-side**. Each lookup is archived under `$OCROWLEY_DATA_DIR/
 |----------|---------|
 | `OCROWLEY_SPIDERDASH_URL` | `https://spiderdash-mbpjlxnq.manus.space` |
 | `OCROWLEY_SPIDERFOOT_URL` | `http://165.227.237.155:5001` |
-| `OCROWLEY_BIGBROTHER_BRIDGE` | _(none — set if you run a bridge)_ |
+| `OCROWLEY_BIGBROTHER_BRIDGE` | `http://127.0.0.1:8798` (private sidecar; auto-started by `who:server`) |
 | `OCROWLEY_BRIDGE_TIMEOUT_MS` | `180000` |
 
-See `.env.example`. Lawful use only. Leads ≠ evidence.
+### Private BigBrother
+
+```bash
+pip install -e python/ocrowley_osint
+python -m ocrowley_osint --port 8798   # or let who:server autostart
+# Install your private `the_big_brother` package on PYTHONPATH for live modules
+```
+
+See `.env.example`. Private / lawful use only. Leads ≠ evidence.

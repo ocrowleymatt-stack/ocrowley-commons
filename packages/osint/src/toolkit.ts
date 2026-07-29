@@ -344,6 +344,9 @@ export function createFullDiscover(opts: ToolkitOptions) {
         seeds,
         sweepNumber,
         authorizationRef: opts.auth.authorizationRef,
+        scanType: 'Passive',
+        peopleFocus: true,
+        privateUse: true,
       });
       if (bb) {
         usedTools.push('bb-bridge');

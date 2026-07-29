@@ -77,7 +77,7 @@ async function hydrateSettingsForm() {
   els.setFull.checked = local.full ?? remote.full ?? true;
   els.setCli.checked = Boolean(local.enableCliTools ?? remote.enableCliTools);
   els.setSf.value = local.spiderfootUrl || remote.spiderfootUrl || 'http://165.227.237.155:5001';
-  els.setBb.value = local.bigbrotherBridgeUrl || remote.bigbrotherBridgeUrl || '';
+  els.setBb.value = local.bigbrotherBridgeUrl || remote.bigbrotherBridgeUrl || 'http://127.0.0.1:8798';
   els.setSd.value = local.spiderdashUrl || remote.spiderdashUrl || 'https://spiderdash-mbpjlxnq.manus.space';
   els.setTimeout.value = local.bridgeTimeoutMs || remote.bridgeTimeoutMs || 180000;
   els.setHibp.value = '';
@@ -236,6 +236,7 @@ if (!localStorage.getItem(STORAGE_KEY)) {
     full: true,
     spiderdashUrl: 'https://spiderdash-mbpjlxnq.manus.space',
     spiderfootUrl: 'http://165.227.237.155:5001',
+    bigbrotherBridgeUrl: 'http://127.0.0.1:8798',
   });
 }
 

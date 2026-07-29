@@ -11,7 +11,9 @@
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test:ai-client": "npm run test -w @ocrowley/ai-client",
-    "test:intent": "npm run test -w @ocrowley/intent"
+    "test:intent": "npm run test -w @ocrowley/intent",
+    "who:server": "npm run who:server -w @ocrowley/osint",
+    "bb:bridge": "PYTHONPATH=python/ocrowley_osint python3 -m ocrowley_osint --port 8798"
   },
   "engines": {
     "node": ">=20"

@@ -23,6 +23,7 @@ export * from './whoSpiderdash.js';
 export * from './whoArchive.js';
 export * from './bridgeAwait.js';
 export * from './bridgeDefaults.js';
+export * from './bigbrotherBridge.js';
 export * from './spiderdashClient.js';
 export * from './httpApi.js';
 

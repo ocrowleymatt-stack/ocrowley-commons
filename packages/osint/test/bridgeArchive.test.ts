@@ -6,29 +6,38 @@ import {
   applyBridgeUrlDefaults,
   resolveSpiderdashUrl,
   resolveSpiderfootUrl,
+  resolveBigbrotherUrl,
   SPIDERDASH_DEFAULT_URL,
   SPIDERFOOT_DEFAULT_URL,
+  BIGBROTHER_DEFAULT_URL,
 } from '../src/bridgeDefaults.js';
 
 describe('bridge defaults', () => {
-  it('resolves hosted SpiderDash + SpiderFoot URLs', () => {
+  it('resolves hosted SpiderDash + SpiderFoot + private BigBrother URLs', () => {
     const prevSd = process.env.OCROWLEY_SPIDERDASH_URL;
     const prevSf = process.env.OCROWLEY_SPIDERFOOT_URL;
+    const prevBb = process.env.OCROWLEY_BIGBROTHER_BRIDGE;
     delete process.env.OCROWLEY_SPIDERDASH_URL;
     delete process.env.OCROWLEY_SPIDERFOOT_URL;
+    delete process.env.OCROWLEY_BIGBROTHER_BRIDGE;
     try {
       assert.equal(resolveSpiderdashUrl(), SPIDERDASH_DEFAULT_URL);
       assert.equal(resolveSpiderfootUrl(), SPIDERFOOT_DEFAULT_URL);
+      assert.equal(resolveBigbrotherUrl(), BIGBROTHER_DEFAULT_URL);
       const applied = applyBridgeUrlDefaults();
       assert.equal(applied.spiderdashUrl, SPIDERDASH_DEFAULT_URL);
       assert.equal(applied.spiderfootUrl, SPIDERFOOT_DEFAULT_URL);
+      assert.equal(applied.bigbrotherBridgeUrl, BIGBROTHER_DEFAULT_URL);
       assert.match(process.env.OCROWLEY_SPIDERDASH_URL || '', /spiderdash/);
       assert.match(process.env.OCROWLEY_SPIDERFOOT_URL || '', /165\.227\.237\.155/);
+      assert.match(process.env.OCROWLEY_BIGBROTHER_BRIDGE || '', /127\.0\.0\.1:8798/);
     } finally {
       if (prevSd === undefined) delete process.env.OCROWLEY_SPIDERDASH_URL;
       else process.env.OCROWLEY_SPIDERDASH_URL = prevSd;
       if (prevSf === undefined) delete process.env.OCROWLEY_SPIDERFOOT_URL;
       else process.env.OCROWLEY_SPIDERFOOT_URL = prevSf;
+      if (prevBb === undefined) delete process.env.OCROWLEY_BIGBROTHER_BRIDGE;
+      else process.env.OCROWLEY_BIGBROTHER_BRIDGE = prevBb;
     }
   });
 });
