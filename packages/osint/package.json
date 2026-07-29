@@ -1,0 +1,42 @@
+{
+  "name": "@ocrowley/osint",
+  "version": "0.1.0",
+  "description": "OSINT entity, dossier, scan, stylometry, and enrichment helpers",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "web",
+    "bin",
+    "README.md"
+  ],
+  "bin": {
+    "ocrowley-who": "./bin/who.mjs",
+    "ocrowley-who-server": "./bin/who-server.mjs"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "who": "node ./bin/who.mjs",
+    "who:server": "node ./bin/who-server.mjs"
+  },
+  "dependencies": {
+    "@ocrowley/policy": "0.1.0",
+    "@ocrowley/darkweb": "0.1.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "@types/node": "^22.14.0"
+  },
+  "license": "MIT"
+}

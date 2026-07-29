@@ -15,6 +15,7 @@ craigs-navigator) remain separate and consume these packages.
 5. **Local-first / cloud-second persistence** — atomic file writes + cache-first reads.
 6. **Honest research** — stub search returns `web_search_unavailable` instead of fabricated results.
 7. **Stdlib-first Python cores** — agent OS packages avoid heavy runtime deps.
+8. **Authorized OSINT / dark-web indexes** — default-deny policy; clearnet indexes and breach APIs only; no fabricated hits; no hardcoded secrets.
 
 ## Layout
 
@@ -43,12 +44,21 @@ flowchart LR
   story["@ocrowley/story-memory"]
   privacy["@ocrowley/privacy-kit"]
   ops["@ocrowley/ops"]
+  crypto["@ocrowley/crypto"]
+  policyTs["@ocrowley/policy"]
+  auditTs["@ocrowley/audit"]
+  coherence["@ocrowley/coherence"]
   rules["@ocrowley/literary-rules"]
+  osint["@ocrowley/osint"]
+  darkweb["@ocrowley/darkweb"]
 
   prompts --> aiClient
   research --> persistence
   jobs --> persistence
   manuscript --> intent
+  osint --> policyTs
+  darkweb --> policyTs
+  darkweb --> osint
 ```
 
 ## Python dependency graph
@@ -78,7 +88,8 @@ flowchart LR
 | Local-first persistence API | Shakespeare `fix/local-first-persistence` |
 | Agent OS cores | Life-os `main` only |
 | Privacy UX contracts | craigs-navigator `main` |
-| Never vendor | TheBigBrother fork, handsy intercept stubs, nested AI Studio dumps |
+| OSINT / dark-web adapters | spiderfoot-ui + nexus-backend + Hook (keys scrubbed) |
+| Never vendor | TheBigBrother scanner engines, handsy intercept stubs, nested AI Studio dumps, hardcoded API keys |
 
 ## Consumption model
 
