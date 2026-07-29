@@ -15,8 +15,8 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm install
-      - run: npm run build -w @ocrowley/policy -w @ocrowley/darkweb -w @ocrowley/osint
-      - run: npm run build
+      - name: Build (dependency order)
+        run: npm run build
       - run: npm test
       - name: WHO package test
         run: npm run test -w @ocrowley/osint
