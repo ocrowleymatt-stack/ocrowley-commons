@@ -65,6 +65,11 @@ npm run who:server -w @ocrowley/osint
 | `POST` | `/api/who/jobs` | Async lookup → `202 { jobId }` (durable stages + dossier + audit) |
 | `GET` | `/api/who/jobs` | List jobs (optional `?case=`) |
 | `GET` | `/api/who/jobs/:id` | Job status / result |
+| `GET` | `/api/who/jobs/:id/events` | SSE progress stream |
+| `POST` | `/api/who/jobs/:id/retry` | Re-queue failed/partial/completed job |
+| `POST` | `/api/who/jobs/:id/cancel` | Cancel queued/running job |
+| `GET` | `/api/entities` | Entity index (`?case=&q=`) |
+| `GET` | `/api/entities/:id?case=` | Latest dossier pointer for entity |
 | `GET` | `/api/dossiers` | List case dossiers |
 | `GET` | `/api/dossiers/:id?case=` | Load one dossier |
 | `GET` | `/api/audit` | Hash-chained WHO audit (`?verify=1`) |

@@ -1,43 +1,75 @@
 /**
- * In-process WHO job worker.
- * Claims queued who.lookup jobs, runs who(), writes dossier + audit.
+ * In-process WHO job worker (Phase 2: leases + SSE progress).
  */
 
+import { generateId, setConfig } from '@ocrowley/persistence';
 import type { CaspaJob } from '@ocrowley/jobs';
-import { setConfig } from '@ocrowley/persistence';
 import { who, type WhoHints } from '../who.js';
 import { assertOsintAllowed } from '../policy.js';
 import { dossierFromWhoResult } from '../dossier/fromWhoResult.js';
 import { writeDossier } from '../dossier/dossierStore.js';
+import { upsertEntityIndex } from '../dossier/entityIndex.js';
 import { appendWhoAudit } from '../audit/whoAudit.js';
 import { WHO_JOB_TYPE, type WhoJobPayload, type WhoJobResult } from './whoJobTypes.js';
 import { whoJobService } from './whoJobService.js';
+import { publishWhoProgress } from './whoProgress.js';
 
 export interface WhoWorkerOptions {
-  /** Poll interval when idle (ms). Default 750. */
   pollMs?: number;
-  /** Stop after this many processed jobs (tests). */
   maxJobs?: number;
-  /** Abort signal / stop flag. */
   shouldStop?: () => boolean;
+  /** Lease duration ms (default 90s). */
+  leaseMs?: number;
+  /** Worker identity (default random). */
+  workerId?: string;
 }
 
 let running = false;
 let stopRequested = false;
 let loopPromise: Promise<void> | null = null;
+let workerId = '';
+
+const DEFAULT_LEASE_MS = 90_000;
 
 export function isWhoWorkerRunning(): boolean {
   return running;
+}
+
+export function getWhoWorkerId(): string {
+  return workerId;
 }
 
 export function requestWhoWorkerStop(): void {
   stopRequested = true;
 }
 
-/** Configure persistence root from OCROWLEY_DATA_DIR if set. */
 export function ensureWhoDataDir(): void {
   const dir = process.env.OCROWLEY_DATA_DIR || process.env.DATA_DIR;
   if (dir) setConfig({ dataDir: dir });
+}
+
+async function stage(
+  jobId: string,
+  stageId: string,
+  label: string,
+  work: () => Promise<unknown>,
+): Promise<unknown> {
+  const jobs = whoJobService();
+  const current = await jobs.get(jobId);
+  if (current?.status === 'cancelled') {
+    throw Object.assign(new Error('Job cancelled'), { statusCode: 409, cancelled: true });
+  }
+  await jobs.startStage(jobId, stageId);
+  publishWhoProgress(jobId, 'stage', { stage: stageId, label, status: 'running' });
+  await jobs.heartbeatLease(jobId, workerId, DEFAULT_LEASE_MS);
+  const partial = await work();
+  const after = await jobs.get(jobId);
+  if (after?.status === 'cancelled') {
+    throw Object.assign(new Error('Job cancelled'), { statusCode: 409, cancelled: true });
+  }
+  await jobs.completeStage(jobId, stageId, partial);
+  publishWhoProgress(jobId, 'stage', { stage: stageId, label, status: 'completed', partial });
+  return partial;
 }
 
 export async function processWhoJob(job: CaspaJob): Promise<CaspaJob> {
@@ -47,96 +79,134 @@ export async function processWhoJob(job: CaspaJob): Promise<CaspaJob> {
   const caseRef = String(payload.caseRef || job.projectId || '').trim();
 
   try {
-    await jobs.startStage(job.id, 'policy');
-    assertOsintAllowed('enrich.person', {
-      actorId,
-      roles: ['osint-operator'],
-      authorizationRef: caseRef,
-      purpose: process.env.OCROWLEY_OSINT_PURPOSE || 'authorised people research',
-      environment: (process.env.NODE_ENV as 'development' | 'staging' | 'production') || 'development',
-    });
-    await appendWhoAudit({
-      actorId,
-      action: 'who.requested',
-      resourceType: 'who.job',
-      resourceId: job.id,
-      metadata: { q: payload.q, caseRef },
-    });
-    await jobs.completeStage(job.id, 'policy', { caseRef });
-
-    await jobs.startStage(job.id, 'discover');
-    const hints: WhoHints = {
-      case: caseRef,
-      deep: payload.deep,
-      full: payload.full,
-      archive: payload.archive !== false,
-      at: payload.at,
-      in: payload.in,
-      email: payload.email,
-      username: payload.username,
-      phone: payload.phone,
-      aka: payload.aka,
-      country: payload.country,
-      enableCliTools: payload.enableCliTools,
-    };
-    const result = await who(payload.q, hints);
-    await jobs.completeStage(job.id, 'discover', {
-      name: result.name,
-      stats: result.stats,
-      toolsUsed: result.toolsUsed,
+    await stage(job.id, 'policy', 'Authorize case', async () => {
+      assertOsintAllowed('enrich.person', {
+        actorId,
+        roles: ['osint-operator'],
+        authorizationRef: caseRef,
+        purpose: process.env.OCROWLEY_OSINT_PURPOSE || 'authorised people research',
+        environment:
+          (process.env.NODE_ENV as 'development' | 'staging' | 'production') || 'development',
+      });
+      await appendWhoAudit({
+        actorId,
+        action: 'who.requested',
+        resourceType: 'who.job',
+        resourceId: job.id,
+        metadata: { q: payload.q, caseRef },
+      });
+      return { caseRef };
     });
 
-    await jobs.startStage(job.id, 'dossier');
-    const dossier = dossierFromWhoResult(result, caseRef);
-    const stored = await writeDossier({
-      caseRef,
-      dossier,
-      jobId: job.id,
-      archiveId: result.archiveId,
+    publishWhoProgress(job.id, 'progress', {
+      percent: 25,
+      message: 'Running who() discover',
     });
-    await appendWhoAudit({
-      actorId,
-      action: 'dossier.written',
-      resourceType: 'who.dossier',
-      resourceId: stored.id,
-      metadata: { caseRef, entityId: stored.entityId, jobId: job.id },
-    });
-    await jobs.completeStage(job.id, 'dossier', { dossierId: stored.id });
 
-    await jobs.startStage(job.id, 'audit');
-    const completed = await appendWhoAudit({
-      actorId,
-      action: 'who.completed',
-      resourceType: 'who.job',
-      resourceId: job.id,
-      metadata: {
+    let whoResult!: Awaited<ReturnType<typeof who>>;
+    await stage(job.id, 'discover', 'Run who()', async () => {
+      const hints: WhoHints = {
+        case: caseRef,
+        deep: payload.deep,
+        full: payload.full,
+        archive: payload.archive !== false,
+        at: payload.at,
+        in: payload.in,
+        email: payload.email,
+        username: payload.username,
+        phone: payload.phone,
+        aka: payload.aka,
+        country: payload.country,
+        enableCliTools: payload.enableCliTools,
+      };
+      await jobs.heartbeatLease(job.id, workerId, DEFAULT_LEASE_MS);
+      whoResult = await who(payload.q, hints);
+      publishWhoProgress(job.id, 'progress', {
+        percent: 70,
+        message: 'Discover finished',
+        stats: whoResult.stats,
+        toolsUsed: whoResult.toolsUsed,
+      });
+      return {
+        name: whoResult.name,
+        stats: whoResult.stats,
+        toolsUsed: whoResult.toolsUsed,
+      };
+    });
+
+    publishWhoProgress(job.id, 'progress', { percent: 80, message: 'Writing dossier' });
+    const stored = (await stage(job.id, 'dossier', 'Write dossier', async () => {
+      const dossier = dossierFromWhoResult(whoResult, caseRef);
+      const written = await writeDossier({
         caseRef,
-        dossierId: stored.id,
-        archiveId: result.archiveId,
-        confirmed: result.stats.confirmed,
-        checked: result.stats.checked,
-      },
-    });
-    await jobs.completeStage(job.id, 'audit', { auditSequence: completed.sequence });
+        dossier,
+        jobId: job.id,
+        archiveId: whoResult.archiveId,
+      });
+      await upsertEntityIndex({
+        caseRef,
+        entityId: written.entityId,
+        value: dossier.entity.value,
+        type: String(dossier.entity.type),
+        dossierId: written.id,
+        jobId: job.id,
+        stats: whoResult.stats,
+      });
+      await appendWhoAudit({
+        actorId,
+        action: 'dossier.written',
+        resourceType: 'who.dossier',
+        resourceId: written.id,
+        metadata: { caseRef, entityId: written.entityId, jobId: job.id },
+      });
+      return { dossierId: written.id, entityId: written.entityId };
+    })) as { dossierId: string; entityId: string };
+
+    const completed = (await stage(job.id, 'audit', 'Append audit', async () => {
+      const entry = await appendWhoAudit({
+        actorId,
+        action: 'who.completed',
+        resourceType: 'who.job',
+        resourceId: job.id,
+        metadata: {
+          caseRef,
+          dossierId: stored.dossierId,
+          archiveId: whoResult.archiveId,
+          confirmed: whoResult.stats.confirmed,
+          checked: whoResult.stats.checked,
+        },
+      });
+      return { auditSequence: entry.sequence };
+    })) as { auditSequence: number };
 
     const jobResult: WhoJobResult = {
       who: {
-        q: result.q,
-        name: result.name,
-        next: result.next,
-        stats: result.stats,
-        toolsUsed: result.toolsUsed,
-        archiveId: result.archiveId,
-        recursive: result.recursive,
+        q: whoResult.q,
+        name: whoResult.name,
+        next: whoResult.next,
+        stats: whoResult.stats,
+        toolsUsed: whoResult.toolsUsed,
+        archiveId: whoResult.archiveId,
+        recursive: whoResult.recursive,
       },
-      dossierId: stored.id,
-      auditSequence: completed.sequence,
-      warning: result.warning,
+      dossierId: stored.dossierId,
+      auditSequence: completed.auditSequence,
+      warning: whoResult.warning,
     };
     const done = await jobs.complete(job.id, jobResult);
+    publishWhoProgress(job.id, 'completed', {
+      percent: 100,
+      result: jobResult,
+    });
     return done ?? job;
   } catch (err) {
+    const cancelled = Boolean((err as { cancelled?: boolean }).cancelled);
     const message = err instanceof Error ? err.message : String(err);
+    if (cancelled) {
+      publishWhoProgress(job.id, 'cancelled', { message });
+      const cur = await jobs.get(job.id);
+      return cur ?? job;
+    }
     const denied = /denied|authorization|case/i.test(message);
     try {
       await appendWhoAudit({
@@ -147,29 +217,35 @@ export async function processWhoJob(job: CaspaJob): Promise<CaspaJob> {
         metadata: { caseRef, error: message },
       });
     } catch {
-      // audit sink must not mask the original failure
+      // ignore
     }
     const failed = await jobs.markFailed(job.id, message);
+    publishWhoProgress(job.id, 'failed', { message, denied });
     return failed ?? job;
   }
 }
 
-export async function claimNextWhoJob(): Promise<CaspaJob | null> {
+export async function claimNextWhoJob(owner = workerId): Promise<CaspaJob | null> {
   const jobs = whoJobService();
-  const queued = (await jobs.list())
-    .filter((j) => j.type === WHO_JOB_TYPE && j.status === 'queued')
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const next = queued[0];
-  if (!next) return null;
-  return jobs.patch(next.id, {
-    status: 'running',
-    startedAt: next.startedAt ?? new Date().toISOString(),
+  const leaseMs = Number(process.env.OCROWLEY_WHO_LEASE_MS || DEFAULT_LEASE_MS);
+  const claimed = await jobs.claimNextJobWithLease({
+    owner: owner || 'who-worker',
+    leaseMs,
+    type: WHO_JOB_TYPE,
   });
+  if (claimed) {
+    publishWhoProgress(claimed.id, 'claimed', {
+      workerId: owner || workerId,
+      leaseUntil: claimed.leaseUntil,
+    });
+  }
+  return claimed;
 }
 
 export async function runWhoWorkerOnce(): Promise<CaspaJob | null> {
   ensureWhoDataDir();
-  const claimed = await claimNextWhoJob();
+  if (!workerId) workerId = `who-${generateId().slice(0, 10)}`;
+  const claimed = await claimNextWhoJob(workerId);
   if (!claimed) return null;
   return processWhoJob(claimed);
 }
@@ -177,19 +253,12 @@ export async function runWhoWorkerOnce(): Promise<CaspaJob | null> {
 export async function startWhoWorker(opts: WhoWorkerOptions = {}): Promise<void> {
   if (running) return;
   ensureWhoDataDir();
+  workerId = opts.workerId || `who-${generateId().slice(0, 10)}`;
   const jobs = whoJobService();
+  const leaseMs = opts.leaseMs ?? Number(process.env.OCROWLEY_WHO_LEASE_MS || DEFAULT_LEASE_MS);
 
-  // Recover only WHO jobs stuck in running (avoid touching other job types).
-  const stuck = (await jobs.list()).filter(
-    (j) => j.type === WHO_JOB_TYPE && j.status === 'running',
-  );
-  for (const job of stuck) {
-    await jobs.patch(job.id, {
-      status: 'partial',
-      error: 'Worker restarted while this job was running — retry to resume.',
-      resumeFromStage: job.currentStage,
-    });
-  }
+  // Requeue expired leases as partial for explicit retry; claimNext also reclaims.
+  await jobs.recoverStuckJobs({ type: WHO_JOB_TYPE });
 
   running = true;
   stopRequested = false;
@@ -199,6 +268,8 @@ export async function startWhoWorker(opts: WhoWorkerOptions = {}): Promise<void>
   loopPromise = (async () => {
     while (!stopRequested && !(opts.shouldStop?.())) {
       if (opts.maxJobs !== undefined && processed >= opts.maxJobs) break;
+      // keep leases warm is handled per-stage; claim uses leaseMs
+      void leaseMs;
       const job = await runWhoWorkerOnce();
       if (job) {
         processed += 1;

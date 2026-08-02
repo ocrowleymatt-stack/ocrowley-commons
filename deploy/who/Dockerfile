@@ -31,7 +31,7 @@ ENV NODE_ENV=production \
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app /app
-RUN mkdir -p /data/who-archive /data/who-dossiers /data/who-audit /data/caspa-jobs
+RUN mkdir -p /data/who-archive /data/who-dossiers /data/who-audit /data/who-entities /data/caspa-jobs
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD curl -sf http://127.0.0.1:8787/api/health || exit 1

@@ -123,6 +123,32 @@ describe('WHO nuclear Phase 1 — jobs / dossier / audit', () => {
     assert.equal(pub.caseRef, 'CASE-NUCLEAR-1');
   });
 
+  it('indexes entities and supports cancel + retry', async () => {
+    const { listEntityIndex } = await import('../src/dossier/entityIndex.js');
+    const { cancelWhoJob, retryWhoJob } = await import('../src/jobs/whoJobService.js');
+
+    const job = await enqueueWhoJob({
+      q: 'Grace Hopper',
+      caseRef: 'CASE-NUCLEAR-1',
+      full: false,
+      archive: false,
+    });
+    const done = await runWhoWorkerOnce();
+    assert.ok(done);
+    assert.equal(done!.status, 'completed');
+
+    const entities = await listEntityIndex({ caseRef: 'CASE-NUCLEAR-1', q: 'hopper' });
+    assert.ok(entities.length >= 1);
+    assert.ok(entities[0].latestDossierId);
+
+    const retried = await retryWhoJob(job.id);
+    assert.equal(retried!.status, 'queued');
+    assert.equal(retried!.retryCount, 1);
+
+    const cancelled = await cancelWhoJob(job.id, 'test cancel');
+    assert.equal(cancelled!.status, 'cancelled');
+  });
+
   it('marks denied jobs when case auth fails', async () => {
     const job = await enqueueWhoJob({
       q: 'Nobody',

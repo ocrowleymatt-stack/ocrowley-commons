@@ -56,6 +56,8 @@ curl -sS -H "X-OCROWLEY-WHO-PIN: $OCROWLEY_WHO_PIN" \
 
 In-process worker is on by default (`OCROWLEY_WHO_WORKER=1`). Optional at-rest encryption: set `ENCRYPTION_MASTER_KEY` (64 hex chars).
 
+Phase 2 adds **leases** (multi-worker safe reclaim), **SSE** (`GET /api/who/jobs/:id/events`), **retry/cancel**, and an **entity index** (`/api/entities`) for case-scoped person → latest dossier pointers. Lease TTL: `OCROWLEY_WHO_LEASE_MS` (default 90000).
+
 ## Local (no Docker)
 
 ```bash

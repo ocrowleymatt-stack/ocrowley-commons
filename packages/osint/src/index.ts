@@ -31,5 +31,7 @@ export * from './jobs/whoJobService.js';
 export * from './jobs/whoWorker.js';
 export * from './dossier/fromWhoResult.js';
 export * from './dossier/dossierStore.js';
+export * from './dossier/entityIndex.js';
+export * from './jobs/whoProgress.js';
 export * from './audit/whoAudit.js';
 

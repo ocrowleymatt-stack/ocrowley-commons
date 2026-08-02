@@ -23,14 +23,19 @@ import {
   resolveSpiderfootUrl,
 } from './bridgeDefaults.js';
 import {
+  cancelWhoJob,
   enqueueWhoJob,
   getWhoJob,
   listWhoJobs,
   publicWhoJob,
+  retryWhoJob,
 } from './jobs/whoJobService.js';
-import { isWhoWorkerRunning } from './jobs/whoWorker.js';
+import { getWhoWorkerId, isWhoWorkerRunning } from './jobs/whoWorker.js';
+import { sseBroadcaster, whoJobChannel } from './jobs/whoProgress.js';
 import { listDossiers, readDossier } from './dossier/dossierStore.js';
+import { getEntityIndex, listEntityIndex } from './dossier/entityIndex.js';
 import { listWhoAudit, verifyWhoAudit } from './audit/whoAudit.js';
+import { generateId } from '@ocrowley/persistence';
 
 // Ensure hosted bridge URLs are set when env is empty.
 applyBridgeUrlDefaults();
@@ -370,7 +375,7 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
           service: 'ocrowley-who',
           pinRequired: requirePin,
           caseConfigured: Boolean(process.env.OCROWLEY_OSINT_CASE?.trim()),
-          worker: { running: isWhoWorkerRunning() },
+          worker: { running: isWhoWorkerRunning(), id: getWhoWorkerId() || null },
           bridges: {
             spiderdash: resolveSpiderdashUrl(),
             spiderfoot: resolveSpiderfootUrl(),
@@ -510,14 +515,132 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
         return;
       }
 
-      if (pathname.startsWith('/api/who/jobs/') && method === 'GET') {
-        const id = pathname.slice('/api/who/jobs/'.length);
-        const job = await getWhoJob(id);
-        if (!job) {
+      if (pathname.startsWith('/api/who/jobs/') && (method === 'GET' || method === 'POST')) {
+        const rest = pathname.slice('/api/who/jobs/'.length);
+        const [id, action] = rest.split('/');
+        if (!id) {
           sendJson(res, 404, { error: 'Job not found' });
           return;
         }
-        sendJson(res, 200, publicWhoJob(job));
+
+        if (method === 'GET' && action === 'events') {
+          const job = await getWhoJob(id);
+          if (!job) {
+            sendJson(res, 404, { error: 'Job not found' });
+            return;
+          }
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+            'Access-Control-Allow-Origin': '*',
+          });
+          res.write(`event: hello\ndata: ${JSON.stringify({ jobId: id, status: job.status })}\n\n`);
+          const clientId = generateId();
+          const unsub = sseBroadcaster.subscribe(whoJobChannel(id), {
+            id: clientId,
+            write: (chunk) => {
+              try {
+                res.write(chunk);
+              } catch {
+                /* closed */
+              }
+            },
+          });
+          // Snapshot current status as progress event
+          res.write(
+            `event: progress\ndata: ${JSON.stringify({
+              jobId: id,
+              status: job.status,
+              currentStage: job.currentStage,
+              at: new Date().toISOString(),
+            })}\n\n`,
+          );
+          const keepAlive = setInterval(() => {
+            try {
+              res.write(': keepalive\n\n');
+            } catch {
+              clearInterval(keepAlive);
+            }
+          }, 15000);
+          req.on('close', () => {
+            clearInterval(keepAlive);
+            unsub();
+          });
+          return;
+        }
+
+        if (method === 'POST' && action === 'retry') {
+          const job = await retryWhoJob(id);
+          if (!job) {
+            sendJson(res, 404, { error: 'Job not found' });
+            return;
+          }
+          sendJson(res, 200, { retried: true, job: publicWhoJob(job) });
+          return;
+        }
+
+        if (method === 'POST' && action === 'cancel') {
+          const body = await readJsonBody(req);
+          const job = await cancelWhoJob(
+            id,
+            typeof (body as { reason?: string }).reason === 'string'
+              ? (body as { reason: string }).reason
+              : undefined,
+          );
+          if (!job) {
+            sendJson(res, 404, { error: 'Job not found' });
+            return;
+          }
+          sendJson(res, 200, { cancelled: true, job: publicWhoJob(job) });
+          return;
+        }
+
+        if (method === 'GET' && !action) {
+          const job = await getWhoJob(id);
+          if (!job) {
+            sendJson(res, 404, { error: 'Job not found' });
+            return;
+          }
+          sendJson(res, 200, publicWhoJob(job));
+          return;
+        }
+
+        sendJson(res, 404, { error: 'Not found', path: pathname });
+        return;
+      }
+
+      if (pathname === '/api/entities' && method === 'GET') {
+        const caseRef = resolveCaseRef(
+          req.headers,
+          undefined,
+          url.searchParams.get('case') || undefined,
+        );
+        const limit = Number(url.searchParams.get('limit') || 40);
+        const q = url.searchParams.get('q') || undefined;
+        sendJson(res, 200, {
+          entries: await listEntityIndex({ caseRef: caseRef || undefined, limit, q }),
+        });
+        return;
+      }
+
+      if (pathname.startsWith('/api/entities/') && method === 'GET') {
+        const entityId = pathname.slice('/api/entities/'.length);
+        const caseRef = resolveCaseRef(
+          req.headers,
+          undefined,
+          url.searchParams.get('case') || undefined,
+        );
+        if (!caseRef) {
+          sendJson(res, 401, { error: 'Case authorization required to read entities' });
+          return;
+        }
+        const entry = await getEntityIndex(caseRef, entityId);
+        if (!entry) {
+          sendJson(res, 404, { error: 'Entity not found' });
+          return;
+        }
+        sendJson(res, 200, entry);
         return;
       }
 
