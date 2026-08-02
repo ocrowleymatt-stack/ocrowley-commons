@@ -11,6 +11,7 @@ import { applyBridgeUrlDefaults } from '../dist/bridgeDefaults.js';
 import { ensureBigBrotherBridge } from '../dist/bigbrotherBridge.js';
 import { listenWhoServer } from '../dist/httpApi.js';
 import { ensureWhoDataDir, startWhoWorker } from '../dist/jobs/whoWorker.js';
+import { pgHealth } from '../dist/db/pg.js';
 
 const urls = applyBridgeUrlDefaults();
 ensureWhoDataDir();
@@ -22,6 +23,7 @@ const port = process.argv.includes('--port')
 const bb = await ensureBigBrotherBridge({ autoStart: true });
 
 const { url, bootstrapToken } = await listenWhoServer({ port });
+const pg = await pgHealth();
 
 const workerEnabled = process.env.OCROWLEY_WHO_WORKER !== '0';
 if (workerEnabled) {
@@ -34,6 +36,7 @@ console.log(`SpiderFoot  → ${urls.spiderfootUrl}`);
 console.log(`BigBrother  → ${bb.url} (${bb.ready ? 'ready' : 'offline'}; ${bb.detail})`);
 console.log(`Worker     → ${workerEnabled ? 'in-process (OCROWLEY_WHO_WORKER=0 to disable)' : 'disabled'}`);
 console.log(`Auth mode  → ${process.env.OCROWLEY_WHO_AUTH || 'pin'}`);
+console.log(`Postgres   → ${pg.enabled ? (pg.ok ? `ok (${pg.detail}; trgm=${pg.trgm})` : `error: ${pg.detail}`) : 'disabled (JSON store)'}`);
 if (bootstrapToken) {
   console.log(`BOOTSTRAP OPERATOR TOKEN (save now; not shown again): ${bootstrapToken}`);
 }

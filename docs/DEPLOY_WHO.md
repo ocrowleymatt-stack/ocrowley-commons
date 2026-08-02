@@ -30,6 +30,7 @@ Open `http://127.0.0.1:8787` — enter PIN (default `3123`), set the same case i
 
 | Service | Port | Notes |
 |---------|------|--------|
+| `db` | internal `5432` | Postgres 16 — dossiers/entities (`pg_trgm` search) |
 | `who` | host `8787` → container `8787` | API + static UI + in-process job worker; binds `0.0.0.0` |
 | `bb` | internal `8798` only | Sidecar on WHO’s network namespace (`127.0.0.1:8798`) — **not published** |
 
@@ -63,6 +64,13 @@ Phase 3 adds **operator tokens + case ACL**:
 - Tokens via `X-OCROWLEY-WHO-TOKEN` or `Authorization: Bearer who_…` (hashed at rest in `who-operators.json`)
 - First start in operators mode prints a one-time bootstrap admin token (or set `OCROWLEY_WHO_BOOTSTRAP_TOKEN`)
 - Operators may be limited to specific case refs (`cases: ["CASE-1"]` or `["*"]`)
+
+Phase 4 adds **Postgres entity fusion** (optional; JSON fallback without `DATABASE_URL`):
+- Compose service `db` + auto-migrate (`who_entities`, `who_dossiers`, `pg_trgm`)
+- Trigram entity search via `GET /api/entities?q=`
+- Related-entity fusion via `GET /api/entities/:id/related?case=`
+- Optional dual-write to JSON: `OCROWLEY_WHO_DUAL_WRITE=1`
+- `pgvector` embedding column is created when the extension is available
 
 ## Local (no Docker)
 

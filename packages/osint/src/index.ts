@@ -36,4 +36,6 @@ export * from './jobs/whoProgress.js';
 export * from './audit/whoAudit.js';
 export * from './auth/whoOperators.js';
 export * from './auth/authorizeRequest.js';
+export * from './db/pg.js';
+export * from './db/migrate.js';
 

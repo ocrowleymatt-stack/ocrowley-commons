@@ -32,17 +32,19 @@
     "who:worker": "node ./bin/who-worker.mjs"
   },
   "dependencies": {
-    "@ocrowley/policy": "0.1.0",
-    "@ocrowley/darkweb": "0.1.0",
-    "@ocrowley/persistence": "0.1.0",
-    "@ocrowley/jobs": "0.1.0",
     "@ocrowley/audit": "0.1.0",
-    "@ocrowley/crypto": "0.1.0"
+    "@ocrowley/crypto": "0.1.0",
+    "@ocrowley/darkweb": "0.1.0",
+    "@ocrowley/jobs": "0.1.0",
+    "@ocrowley/persistence": "0.1.0",
+    "@ocrowley/policy": "0.1.0",
+    "pg": "^8.22.0"
   },
   "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/pg": "^8.20.3",
     "tsx": "^4.21.0",
-    "typescript": "~5.8.2",
-    "@types/node": "^22.14.0"
+    "typescript": "~5.8.2"
   },
   "license": "MIT"
 }

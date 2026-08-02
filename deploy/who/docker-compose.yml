@@ -7,6 +7,22 @@
 # published on the host and works even when bridge inter-container routing is broken.
 
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${OCROWLEY_PG_USER:-who}
+      POSTGRES_PASSWORD: ${OCROWLEY_PG_PASSWORD:-who_dev}
+      POSTGRES_DB: ${OCROWLEY_PG_DB:-who}
+    volumes:
+      - who-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${OCROWLEY_PG_USER:-who} -d ${OCROWLEY_PG_DB:-who}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   who:
     build:
       context: ../..
@@ -17,6 +33,9 @@ services:
       - "${OCROWLEY_WHO_PUBLISH_PORT:-8787}:8787"
     env_file:
       - .env
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       OCROWLEY_WHO_HOST: "0.0.0.0"
@@ -24,6 +43,9 @@ services:
       OCROWLEY_DATA_DIR: /data
       OCROWLEY_BB_AUTOSTART: "0"
       OCROWLEY_BIGBROTHER_BRIDGE: http://127.0.0.1:8798
+      # Phase 4 — dossiers/entities in Postgres (JSON fallback if unset)
+      DATABASE_URL: ${DATABASE_URL:-postgres://who:who_dev@db:5432/who}
+      OCROWLEY_WHO_DUAL_WRITE: ${OCROWLEY_WHO_DUAL_WRITE:-0}
       OCROWLEY_SPIDERDASH_URL: ${OCROWLEY_SPIDERDASH_URL:-https://spiderdash-mbpjlxnq.manus.space}
       OCROWLEY_SPIDERFOOT_URL: ${OCROWLEY_SPIDERFOOT_URL:-http://165.227.237.155:5001}
       OCROWLEY_OSINT_CASE: ${OCROWLEY_OSINT_CASE:?set OCROWLEY_OSINT_CASE in deploy/who/.env}
@@ -71,3 +93,4 @@ services:
 
 volumes:
   who-data:
+  who-pg:

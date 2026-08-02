@@ -33,7 +33,8 @@ import {
 import { getWhoWorkerId, isWhoWorkerRunning } from './jobs/whoWorker.js';
 import { sseBroadcaster, whoJobChannel } from './jobs/whoProgress.js';
 import { listDossiers, readDossier } from './dossier/dossierStore.js';
-import { getEntityIndex, listEntityIndex } from './dossier/entityIndex.js';
+import { fuseCaseEntities, getEntityIndex, listEntityIndex } from './dossier/entityIndex.js';
+import { ensureMigrated, isPostgresEnabled, pgHealth } from './db/pg.js';
 import { listWhoAudit, verifyWhoAudit } from './audit/whoAudit.js';
 import { generateId } from '@ocrowley/persistence';
 import {
@@ -423,6 +424,7 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
           worker: { running: isWhoWorkerRunning(), id: getWhoWorkerId() || null },
           authMode: whoAuthMode(),
           operatorsRequired: operatorsRequired(),
+          postgres: await pgHealth(),
           bridges: {
             spiderdash: resolveSpiderdashUrl(),
             spiderfoot: resolveSpiderfootUrl(),
@@ -715,7 +717,8 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
       }
 
       if (pathname.startsWith('/api/entities/') && method === 'GET') {
-        const entityId = pathname.slice('/api/entities/'.length);
+        const rest = pathname.slice('/api/entities/'.length);
+        const [entityId, action] = rest.split('/');
         const caseRef = resolveCaseRef(
           req.headers,
           undefined,
@@ -728,6 +731,15 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
         const acl = assertCaseAcl(reqAuth(req).operator, caseRef);
         if (!acl.ok) {
           sendJson(res, acl.status, { error: acl.error, hint: acl.hint });
+          return;
+        }
+        if (action === 'related') {
+          const related = await fuseCaseEntities({
+            caseRef,
+            entityId,
+            limit: Number(url.searchParams.get('limit') || 20),
+          });
+          sendJson(res, 200, { entityId, caseRef, related });
           return;
         }
         const entry = await getEntityIndex(caseRef, entityId);
@@ -899,6 +911,9 @@ export async function listenWhoServer(opts: WhoHttpServerOptions = {}): Promise<
 }> {
   const { ensureWhoDataDir } = await import('./jobs/whoWorker.js');
   ensureWhoDataDir();
+  if (isPostgresEnabled()) {
+    await ensureMigrated();
+  }
   await mergeEnvOperators();
   let bootstrapToken: string | undefined;
   if (operatorsRequired()) {
