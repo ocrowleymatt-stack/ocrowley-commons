@@ -30,10 +30,31 @@ Open `http://127.0.0.1:8787` — enter PIN (default `3123`), set the same case i
 
 | Service | Port | Notes |
 |---------|------|--------|
-| `who` | host `8787` → container `8787` | API + static UI; binds `0.0.0.0` |
+| `who` | host `8787` → container `8787` | API + static UI + in-process job worker; binds `0.0.0.0` |
 | `bb` | internal `8798` only | Sidecar on WHO’s network namespace (`127.0.0.1:8798`) — **not published** |
 
-Archive data persists in volume `who-data` → `/data/who-archive`.
+Data volume `who-data` → `/data`:
+- `who-archive/` — lead dumps from sync/async lookups
+- `who-dossiers/` — case-scoped dossier JSON (optionally encrypted)
+- `who-audit/` — hash-chained audit ledger
+- `caspa-jobs/` — durable `who.lookup` job queue
+
+### Async jobs (Phase 1)
+
+```bash
+# enqueue (returns 202 immediately)
+curl -sS -X POST http://127.0.0.1:8787/api/who/jobs \
+  -H 'Content-Type: application/json' \
+  -H "X-OCROWLEY-OSINT-CASE: $OCROWLEY_OSINT_CASE" \
+  -H "X-OCROWLEY-WHO-PIN: $OCROWLEY_WHO_PIN" \
+  -d '{"q":"Jane Doe","full":false}'
+
+# poll
+curl -sS -H "X-OCROWLEY-WHO-PIN: $OCROWLEY_WHO_PIN" \
+  http://127.0.0.1:8787/api/who/jobs/<jobId>
+```
+
+In-process worker is on by default (`OCROWLEY_WHO_WORKER=1`). Optional at-rest encryption: set `ENCRYPTION_MASTER_KEY` (64 hex chars).
 
 ## Local (no Docker)
 

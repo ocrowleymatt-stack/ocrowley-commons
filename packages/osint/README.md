@@ -56,12 +56,18 @@ npm run who:server -w @ocrowley/osint
 
 | Method | Path | Notes |
 |--------|------|--------|
-| `GET` | `/api/health` | Liveness |
+| `GET` | `/api/health` | Liveness (+ worker status) |
 | `GET`/`PUT` | `/api/settings` | Case, full/deep, bridges, CLI; keys accepted on PUT, never echoed |
 | `GET` | `/api/tools` | Ready tool / bridge counts |
-| `POST` | `/api/who` | Body `{ "q": "…", "full": true }` — full toolkit by default |
+| `POST` | `/api/who` | Body `{ "q": "…", "full": true }` — sync full toolkit by default |
 | `GET` | `/api/who?q=…` | Same as POST |
 | `GET`/`POST` | `/api/who/text` | Printable `text/plain` via `whoText()` |
+| `POST` | `/api/who/jobs` | Async lookup → `202 { jobId }` (durable stages + dossier + audit) |
+| `GET` | `/api/who/jobs` | List jobs (optional `?case=`) |
+| `GET` | `/api/who/jobs/:id` | Job status / result |
+| `GET` | `/api/dossiers` | List case dossiers |
+| `GET` | `/api/dossiers/:id?case=` | Load one dossier |
+| `GET` | `/api/audit` | Hash-chained WHO audit (`?verify=1`) |
 | `GET` | `/api/archive` | List saved lookups |
 | `GET` | `/api/archive/:id` | Load one archived report |
 

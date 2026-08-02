@@ -61,5 +61,37 @@ ok "/api/who validation"
 curl -sf -H "$PIN_HDR" "$BASE/api/archive?limit=5" | grep -q 'entries' || fail "/api/archive"
 ok "/api/archive"
 
+# Async job path (worker must be running — who:server default)
+JOB_JSON=$(curl -sf -X POST "$BASE/api/who/jobs" \
+  -H 'Content-Type: application/json' \
+  -H "X-OCROWLEY-OSINT-CASE: $CASE" \
+  -H "$PIN_HDR" \
+  -d '{"q":"Jane Doe","full":false,"archive":true}')
+echo "$JOB_JSON" | grep -q '"jobId"' || fail "/api/who/jobs enqueue"
+JOB_ID=$(echo "$JOB_JSON" | sed -n 's/.*"jobId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+[[ -n "$JOB_ID" ]] || fail "/api/who/jobs jobId parse"
+ok "/api/who/jobs enqueue"
+
+# Poll up to ~60s for completion
+DONE=0
+for _ in $(seq 1 30); do
+  STATUS_JSON=$(curl -sf -H "$PIN_HDR" "$BASE/api/who/jobs/$JOB_ID" || true)
+  if echo "$STATUS_JSON" | grep -q '"status"[[:space:]]*:[[:space:]]*"completed"'; then
+    DONE=1
+    break
+  fi
+  if echo "$STATUS_JSON" | grep -q '"status"[[:space:]]*:[[:space:]]*"failed"'; then
+    fail "/api/who/jobs/$JOB_ID failed: $STATUS_JSON"
+  fi
+  sleep 2
+done
+[[ "$DONE" == "1" ]] || fail "/api/who/jobs/$JOB_ID did not complete in time"
+ok "/api/who/jobs complete"
+
+curl -sf -H "$PIN_HDR" -H "X-OCROWLEY-OSINT-CASE: $CASE" "$BASE/api/dossiers?limit=5" | grep -q 'entries' || fail "/api/dossiers"
+ok "/api/dossiers"
+curl -sf -H "$PIN_HDR" "$BASE/api/audit?limit=5&verify=1" | grep -q '"valid": true\|"valid":true' || fail "/api/audit"
+ok "/api/audit"
+
 echo ""
 echo "All WHO smoke tests passed."

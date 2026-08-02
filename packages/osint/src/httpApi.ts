@@ -22,6 +22,15 @@ import {
   resolveSpiderdashUrl,
   resolveSpiderfootUrl,
 } from './bridgeDefaults.js';
+import {
+  enqueueWhoJob,
+  getWhoJob,
+  listWhoJobs,
+  publicWhoJob,
+} from './jobs/whoJobService.js';
+import { isWhoWorkerRunning } from './jobs/whoWorker.js';
+import { listDossiers, readDossier } from './dossier/dossierStore.js';
+import { listWhoAudit, verifyWhoAudit } from './audit/whoAudit.js';
 
 // Ensure hosted bridge URLs are set when env is empty.
 applyBridgeUrlDefaults();
@@ -361,6 +370,7 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
           service: 'ocrowley-who',
           pinRequired: requirePin,
           caseConfigured: Boolean(process.env.OCROWLEY_OSINT_CASE?.trim()),
+          worker: { running: isWhoWorkerRunning() },
           bridges: {
             spiderdash: resolveSpiderdashUrl(),
             spiderfoot: resolveSpiderfootUrl(),
@@ -441,6 +451,117 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
           return;
         }
         sendJson(res, 200, entry);
+        return;
+      }
+
+      // --- Async WHO jobs (nuclear Phase 1) ---
+      if (pathname === '/api/who/jobs' && method === 'POST') {
+        const body = await readJsonBody(req);
+        const q = (body.q || body.query || body.input || '').trim();
+        const caseRef = resolveCaseRef(req.headers, body.case, undefined);
+        if (requireCase && !caseRef) {
+          sendJson(res, 401, {
+            error: 'Case authorization required',
+            hint: 'Set OCROWLEY_OSINT_CASE, or send X-OCROWLEY-OSINT-CASE / body.case',
+          });
+          return;
+        }
+        if (!q) {
+          sendJson(res, 400, { error: 'Missing query', hint: 'Pass q in JSON body' });
+          return;
+        }
+        const job = await enqueueWhoJob({
+          q,
+          caseRef: caseRef || 'local-dev',
+          deep: body.deep,
+          full: body.full,
+          archive: body.archive,
+          at: body.at,
+          in: body.in,
+          email: body.email,
+          username: body.username,
+          phone: body.phone,
+          aka: body.aka,
+          country: body.country,
+          enableCliTools: body.enableCliTools,
+        });
+        sendJson(res, 202, {
+          accepted: true,
+          jobId: job.id,
+          status: job.status,
+          poll: `/api/who/jobs/${job.id}`,
+          job: publicWhoJob(job),
+        });
+        return;
+      }
+
+      if (pathname === '/api/who/jobs' && method === 'GET') {
+        const caseRef = resolveCaseRef(
+          req.headers,
+          undefined,
+          url.searchParams.get('case') || undefined,
+        );
+        const limit = Number(url.searchParams.get('limit') || 40);
+        const jobs = await listWhoJobs({
+          caseRef: caseRef || undefined,
+          limit,
+        });
+        sendJson(res, 200, { jobs: jobs.map(publicWhoJob) });
+        return;
+      }
+
+      if (pathname.startsWith('/api/who/jobs/') && method === 'GET') {
+        const id = pathname.slice('/api/who/jobs/'.length);
+        const job = await getWhoJob(id);
+        if (!job) {
+          sendJson(res, 404, { error: 'Job not found' });
+          return;
+        }
+        sendJson(res, 200, publicWhoJob(job));
+        return;
+      }
+
+      if (pathname === '/api/dossiers' && method === 'GET') {
+        const caseRef = resolveCaseRef(
+          req.headers,
+          undefined,
+          url.searchParams.get('case') || undefined,
+        );
+        const limit = Number(url.searchParams.get('limit') || 40);
+        sendJson(res, 200, {
+          entries: await listDossiers({ caseRef: caseRef || undefined, limit }),
+        });
+        return;
+      }
+
+      if (pathname.startsWith('/api/dossiers/') && method === 'GET') {
+        const id = pathname.slice('/api/dossiers/'.length);
+        const caseRef = resolveCaseRef(
+          req.headers,
+          undefined,
+          url.searchParams.get('case') || undefined,
+        );
+        if (!caseRef) {
+          sendJson(res, 401, { error: 'Case authorization required to read dossiers' });
+          return;
+        }
+        const entry = await readDossier(caseRef, id);
+        if (!entry) {
+          sendJson(res, 404, { error: 'Dossier not found' });
+          return;
+        }
+        sendJson(res, 200, entry);
+        return;
+      }
+
+      if (pathname === '/api/audit' && method === 'GET') {
+        const limit = Number(url.searchParams.get('limit') || 50);
+        const verify = url.searchParams.get('verify') === '1';
+        const entries = await listWhoAudit(limit);
+        sendJson(res, 200, {
+          entries,
+          ...(verify ? { verification: await verifyWhoAudit() } : {}),
+        });
         return;
       }
 

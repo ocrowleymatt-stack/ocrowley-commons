@@ -26,4 +26,10 @@ export * from './bridgeDefaults.js';
 export * from './bigbrotherBridge.js';
 export * from './spiderdashClient.js';
 export * from './httpApi.js';
+export * from './jobs/whoJobTypes.js';
+export * from './jobs/whoJobService.js';
+export * from './jobs/whoWorker.js';
+export * from './dossier/fromWhoResult.js';
+export * from './dossier/dossierStore.js';
+export * from './audit/whoAudit.js';
 

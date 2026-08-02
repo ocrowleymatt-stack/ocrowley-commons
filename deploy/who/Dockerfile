@@ -10,7 +10,11 @@ COPY python/ocrowley_osint ./python/ocrowley_osint
 RUN npm ci
 # Build in dependency order — npm -w A -w B runs workspaces in parallel.
 # Force emit: host tsbuildinfo must not be present (see .dockerignore).
-RUN npm run build -w @ocrowley/policy \
+RUN npm run build -w @ocrowley/persistence \
+  && npm run build -w @ocrowley/audit \
+  && npm run build -w @ocrowley/crypto \
+  && npm run build -w @ocrowley/jobs \
+  && npm run build -w @ocrowley/policy \
   && npm run build -w @ocrowley/darkweb \
   && npm run build -w @ocrowley/osint
 RUN pip3 install --break-system-packages -e ./python/ocrowley_osint
@@ -22,15 +26,20 @@ ENV NODE_ENV=production \
     OCROWLEY_WHO_PORT=8787 \
     OCROWLEY_DATA_DIR=/data \
     OCROWLEY_BB_AUTOSTART=0 \
+    OCROWLEY_WHO_WORKER=1 \
     OCROWLEY_BIGBROTHER_BRIDGE=http://bb:8798
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app /app
-RUN mkdir -p /data/who-archive
+RUN mkdir -p /data/who-archive /data/who-dossiers /data/who-audit /data/caspa-jobs
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD curl -sf http://127.0.0.1:8787/api/health || exit 1
 CMD ["node", "packages/osint/bin/who-server.mjs"]
+
+FROM who AS who-worker
+ENV OCROWLEY_WHO_WORKER=0
+CMD ["node", "packages/osint/bin/who-worker.mjs"]
 
 FROM python:3.12-slim AS bb
 WORKDIR /app

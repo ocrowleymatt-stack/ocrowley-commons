@@ -20,18 +20,24 @@
   ],
   "bin": {
     "ocrowley-who": "./bin/who.mjs",
-    "ocrowley-who-server": "./bin/who-server.mjs"
+    "ocrowley-who-server": "./bin/who-server.mjs",
+    "ocrowley-who-worker": "./bin/who-worker.mjs"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "node --import tsx --test test/*.test.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
     "who": "node ./bin/who.mjs",
-    "who:server": "node ./bin/who-server.mjs"
+    "who:server": "node ./bin/who-server.mjs",
+    "who:worker": "node ./bin/who-worker.mjs"
   },
   "dependencies": {
     "@ocrowley/policy": "0.1.0",
-    "@ocrowley/darkweb": "0.1.0"
+    "@ocrowley/darkweb": "0.1.0",
+    "@ocrowley/persistence": "0.1.0",
+    "@ocrowley/jobs": "0.1.0",
+    "@ocrowley/audit": "0.1.0",
+    "@ocrowley/crypto": "0.1.0"
   },
   "devDependencies": {
     "tsx": "^4.21.0",
