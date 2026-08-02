@@ -21,7 +21,7 @@ const port = process.argv.includes('--port')
 
 const bb = await ensureBigBrotherBridge({ autoStart: true });
 
-const { url } = await listenWhoServer({ port });
+const { url, bootstrapToken } = await listenWhoServer({ port });
 
 const workerEnabled = process.env.OCROWLEY_WHO_WORKER !== '0';
 if (workerEnabled) {
@@ -33,7 +33,12 @@ console.log(`SpiderDash  → ${urls.spiderdashUrl}`);
 console.log(`SpiderFoot  → ${urls.spiderfootUrl}`);
 console.log(`BigBrother  → ${bb.url} (${bb.ready ? 'ready' : 'offline'}; ${bb.detail})`);
 console.log(`Worker     → ${workerEnabled ? 'in-process (OCROWLEY_WHO_WORKER=0 to disable)' : 'disabled'}`);
+console.log(`Auth mode  → ${process.env.OCROWLEY_WHO_AUTH || 'pin'}`);
+if (bootstrapToken) {
+  console.log(`BOOTSTRAP OPERATOR TOKEN (save now; not shown again): ${bootstrapToken}`);
+}
 console.log(`API  POST ${url}/api/who         sync lookup`);
 console.log(`API  POST ${url}/api/who/jobs    async job (202 + poll)`);
 console.log(`Auth header: X-OCROWLEY-OSINT-CASE (or OCROWLEY_OSINT_CASE env)`);
+console.log(`Operator:    X-OCROWLEY-WHO-TOKEN / Bearer who_… when OCROWLEY_WHO_AUTH=operators`);
 console.log('Private use. Lawful use only. Leads ≠ evidence.');

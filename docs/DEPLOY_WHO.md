@@ -58,6 +58,12 @@ In-process worker is on by default (`OCROWLEY_WHO_WORKER=1`). Optional at-rest e
 
 Phase 2 adds **leases** (multi-worker safe reclaim), **SSE** (`GET /api/who/jobs/:id/events`), **retry/cancel**, and an **entity index** (`/api/entities`) for case-scoped person → latest dossier pointers. Lease TTL: `OCROWLEY_WHO_LEASE_MS` (default 90000).
 
+Phase 3 adds **operator tokens + case ACL**:
+- `OCROWLEY_WHO_AUTH=pin|operators|pin+operators` (default `pin`)
+- Tokens via `X-OCROWLEY-WHO-TOKEN` or `Authorization: Bearer who_…` (hashed at rest in `who-operators.json`)
+- First start in operators mode prints a one-time bootstrap admin token (or set `OCROWLEY_WHO_BOOTSTRAP_TOKEN`)
+- Operators may be limited to specific case refs (`cases: ["CASE-1"]` or `["*"]`)
+
 ## Local (no Docker)
 
 ```bash

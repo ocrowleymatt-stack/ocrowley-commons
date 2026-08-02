@@ -56,7 +56,8 @@ npm run who:server -w @ocrowley/osint
 
 | Method | Path | Notes |
 |--------|------|--------|
-| `GET` | `/api/health` | Liveness (+ worker status) |
+| `GET` | `/api/health` | Liveness (+ worker / auth mode) |
+| `GET` | `/api/auth/me` | Current actor / operator (PIN + optional token) |
 | `GET`/`PUT` | `/api/settings` | Case, full/deep, bridges, CLI; keys accepted on PUT, never echoed |
 | `GET` | `/api/tools` | Ready tool / bridge counts |
 | `POST` | `/api/who` | Body `{ "q": "…", "full": true }` — sync full toolkit by default |
