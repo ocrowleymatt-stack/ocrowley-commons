@@ -3,7 +3,8 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 export type AuditAction =
   | 'snapshot.opened' | 'snapshot.closed' | 'migration.started' | 'migration.committed'
   | 'migration.rolled_back' | 'record.quarantined' | 'backup.created' | 'restore.verified'
-  | 'promotion.requested' | 'promotion.approved' | 'promotion.denied' | 'emergency.rollback';
+  | 'promotion.requested' | 'promotion.approved' | 'promotion.denied' | 'emergency.rollback'
+  | 'who.requested' | 'who.completed' | 'who.denied' | 'who.failed' | 'dossier.written';
 
 export interface AuditEntryInput {
   actorId: string;

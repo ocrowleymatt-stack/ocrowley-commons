@@ -22,6 +22,61 @@ import {
   resolveSpiderdashUrl,
   resolveSpiderfootUrl,
 } from './bridgeDefaults.js';
+import {
+  cancelWhoJob,
+  enqueueWhoJob,
+  getWhoJob,
+  listWhoJobs,
+  publicWhoJob,
+  retryWhoJob,
+} from './jobs/whoJobService.js';
+import { getWhoWorkerId, isWhoWorkerRunning } from './jobs/whoWorker.js';
+import { sseBroadcaster, whoJobChannel } from './jobs/whoProgress.js';
+import { listDossiers, readDossier } from './dossier/dossierStore.js';
+import { getEntityIndex, listEntityIndex } from './dossier/entityIndex.js';
+import { listWhoAudit, verifyWhoAudit } from './audit/whoAudit.js';
+import { generateId } from '@ocrowley/persistence';
+import {
+  authorizeWhoRequest,
+  operatorsRequired,
+  publicOperator,
+  whoAuthMode,
+} from './auth/authorizeRequest.js';
+import {
+  ensureBootstrapOperator,
+  mergeEnvOperators,
+  operatorMayAccessCase,
+  type ResolvedOperator,
+} from './auth/whoOperators.js';
+
+function reqAuth(req: IncomingMessage): {
+  actorId: string;
+  roles: string[];
+  operator: ResolvedOperator | null;
+} {
+  const auth = (req as IncomingMessage & {
+    ocrowleyAuth?: { actorId: string; roles: string[]; operator: ResolvedOperator | null };
+  }).ocrowleyAuth;
+  return {
+    actorId: auth?.actorId || process.env.OCROWLEY_OSINT_ACTOR || 'local',
+    roles: auth?.roles || ['osint-operator'],
+    operator: auth?.operator ?? null,
+  };
+}
+
+function assertCaseAcl(
+  operator: ResolvedOperator | null,
+  caseRef: string,
+): { ok: true } | { ok: false; status: number; error: string; hint: string } {
+  if (!operator || !caseRef) return { ok: true };
+  if (operatorMayAccessCase(operator, caseRef)) return { ok: true };
+  return {
+    ok: false,
+    status: 403,
+    error: 'Case not permitted for this operator',
+    hint: `Operator ${operator.id} cannot access case ${caseRef}`,
+  };
+}
 
 // Ensure hosted bridge URLs are set when env is empty.
 applyBridgeUrlDefaults();
@@ -206,7 +261,10 @@ function headerValue(v: string | string[] | undefined): string {
 function bearerToken(auth: string | string[] | undefined): string {
   const raw = headerValue(auth);
   const m = raw.match(/^Bearer\s+(.+)$/i);
-  return m?.[1]?.trim() || '';
+  const token = m?.[1]?.trim() || '';
+  // Operator tokens (who_…) are not case refs — see auth/whoOperators.ts
+  if (/^who_/i.test(token)) return '';
+  return token;
 }
 
 export interface WhoRequestBody {
@@ -264,7 +322,8 @@ function sendJson(res: ServerResponse, status: number, data: unknown): void {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-OCROWLEY-OSINT-CASE, X-OCROWLEY-WHO-PIN',
+    'Access-Control-Allow-Headers':
+      'Content-Type, Authorization, X-OCROWLEY-OSINT-CASE, X-OCROWLEY-WHO-PIN, X-OCROWLEY-WHO-TOKEN',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
   });
   res.end(body);
@@ -345,7 +404,7 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
       res.writeHead(204, {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers':
-          'Content-Type, Authorization, X-OCROWLEY-OSINT-CASE, X-OCROWLEY-WHO-PIN',
+          'Content-Type, Authorization, X-OCROWLEY-OSINT-CASE, X-OCROWLEY-WHO-PIN, X-OCROWLEY-WHO-TOKEN',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
       });
       res.end();
@@ -361,6 +420,9 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
           service: 'ocrowley-who',
           pinRequired: requirePin,
           caseConfigured: Boolean(process.env.OCROWLEY_OSINT_CASE?.trim()),
+          worker: { running: isWhoWorkerRunning(), id: getWhoWorkerId() || null },
+          authMode: whoAuthMode(),
+          operatorsRequired: operatorsRequired(),
           bridges: {
             spiderdash: resolveSpiderdashUrl(),
             spiderfoot: resolveSpiderfootUrl(),
@@ -390,16 +452,47 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
       }
 
       const apiPath = pathname.startsWith('/api/');
-      if (apiPath && requirePin && !pinAuthorized(req.headers, undefined, pin)) {
-        sendJson(res, 401, {
-          error: 'PIN required',
-          hint: 'Unlock via POST /api/unlock { "pin": "…" } or send X-OCROWLEY-WHO-PIN',
+
+      if (pathname === '/api/auth/me' && method === 'GET') {
+        const gate = await authorizeWhoRequest({
+          headers: req.headers,
+          requireCase: false,
+          requirePin,
+          pin,
+          skipCaseAcl: true,
+        });
+        if (!gate.ok) {
+          sendJson(res, gate.status, { error: gate.error, hint: gate.hint });
+          return;
+        }
+        sendJson(res, 200, {
+          mode: gate.auth.mode,
+          operatorsRequired: operatorsRequired(),
+          actorId: gate.auth.actorId,
+          roles: gate.auth.roles,
+          operator: gate.auth.operator ? publicOperator(gate.auth.operator) : null,
         });
         return;
       }
 
+      // Unified PIN + optional operator gate (case ACL checked after body parse where needed)
+      if (apiPath) {
+        const gate = await authorizeWhoRequest({
+          headers: req.headers,
+          requireCase: false,
+          requirePin,
+          pin,
+          skipCaseAcl: true,
+        });
+        if (!gate.ok) {
+          sendJson(res, gate.status, { error: gate.error, hint: gate.hint });
+          return;
+        }
+        (req as IncomingMessage & { ocrowleyAuth?: typeof gate.auth }).ocrowleyAuth = gate.auth;
+      }
+
       if (pathname === '/api/settings' && method === 'GET') {
-        sendJson(res, 200, publicSettings());
+        sendJson(res, 200, { ...publicSettings(), authMode: whoAuthMode() });
         return;
       }
 
@@ -444,6 +537,262 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
         return;
       }
 
+      // --- Async WHO jobs (nuclear Phase 1) ---
+      if (pathname === '/api/who/jobs' && method === 'POST') {
+        const body = await readJsonBody(req);
+        const q = (body.q || body.query || body.input || '').trim();
+        const caseRef = resolveCaseRef(req.headers, body.case, undefined);
+        const { actorId, operator } = reqAuth(req);
+        if (requireCase && !caseRef) {
+          sendJson(res, 401, {
+            error: 'Case authorization required',
+            hint: 'Set OCROWLEY_OSINT_CASE, or send X-OCROWLEY-OSINT-CASE / body.case',
+          });
+          return;
+        }
+        const acl = assertCaseAcl(operator, caseRef);
+        if (!acl.ok) {
+          sendJson(res, acl.status, { error: acl.error, hint: acl.hint });
+          return;
+        }
+        if (!q) {
+          sendJson(res, 400, { error: 'Missing query', hint: 'Pass q in JSON body' });
+          return;
+        }
+        const job = await enqueueWhoJob({
+          q,
+          caseRef: caseRef || 'local-dev',
+          deep: body.deep,
+          full: body.full,
+          archive: body.archive,
+          at: body.at,
+          in: body.in,
+          email: body.email,
+          username: body.username,
+          phone: body.phone,
+          aka: body.aka,
+          country: body.country,
+          enableCliTools: body.enableCliTools,
+          actorId,
+        });
+        sendJson(res, 202, {
+          accepted: true,
+          jobId: job.id,
+          status: job.status,
+          poll: `/api/who/jobs/${job.id}`,
+          job: publicWhoJob(job),
+        });
+        return;
+      }
+
+      if (pathname === '/api/who/jobs' && method === 'GET') {
+        const caseRef = resolveCaseRef(
+          req.headers,
+          undefined,
+          url.searchParams.get('case') || undefined,
+        );
+        const limit = Number(url.searchParams.get('limit') || 40);
+        const jobs = await listWhoJobs({
+          caseRef: caseRef || undefined,
+          limit,
+        });
+        sendJson(res, 200, { jobs: jobs.map(publicWhoJob) });
+        return;
+      }
+
+      if (pathname.startsWith('/api/who/jobs/') && (method === 'GET' || method === 'POST')) {
+        const rest = pathname.slice('/api/who/jobs/'.length);
+        const [id, action] = rest.split('/');
+        if (!id) {
+          sendJson(res, 404, { error: 'Job not found' });
+          return;
+        }
+
+        if (method === 'GET' && action === 'events') {
+          const job = await getWhoJob(id);
+          if (!job) {
+            sendJson(res, 404, { error: 'Job not found' });
+            return;
+          }
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+            'Access-Control-Allow-Origin': '*',
+          });
+          res.write(`event: hello\ndata: ${JSON.stringify({ jobId: id, status: job.status })}\n\n`);
+          const clientId = generateId();
+          const unsub = sseBroadcaster.subscribe(whoJobChannel(id), {
+            id: clientId,
+            write: (chunk) => {
+              try {
+                res.write(chunk);
+              } catch {
+                /* closed */
+              }
+            },
+          });
+          // Snapshot current status as progress event
+          res.write(
+            `event: progress\ndata: ${JSON.stringify({
+              jobId: id,
+              status: job.status,
+              currentStage: job.currentStage,
+              at: new Date().toISOString(),
+            })}\n\n`,
+          );
+          const keepAlive = setInterval(() => {
+            try {
+              res.write(': keepalive\n\n');
+            } catch {
+              clearInterval(keepAlive);
+            }
+          }, 15000);
+          req.on('close', () => {
+            clearInterval(keepAlive);
+            unsub();
+          });
+          return;
+        }
+
+        if (method === 'POST' && action === 'retry') {
+          const job = await retryWhoJob(id);
+          if (!job) {
+            sendJson(res, 404, { error: 'Job not found' });
+            return;
+          }
+          sendJson(res, 200, { retried: true, job: publicWhoJob(job) });
+          return;
+        }
+
+        if (method === 'POST' && action === 'cancel') {
+          const body = await readJsonBody(req);
+          const job = await cancelWhoJob(
+            id,
+            typeof (body as { reason?: string }).reason === 'string'
+              ? (body as { reason: string }).reason
+              : undefined,
+          );
+          if (!job) {
+            sendJson(res, 404, { error: 'Job not found' });
+            return;
+          }
+          sendJson(res, 200, { cancelled: true, job: publicWhoJob(job) });
+          return;
+        }
+
+        if (method === 'GET' && !action) {
+          const job = await getWhoJob(id);
+          if (!job) {
+            sendJson(res, 404, { error: 'Job not found' });
+            return;
+          }
+          sendJson(res, 200, publicWhoJob(job));
+          return;
+        }
+
+        sendJson(res, 404, { error: 'Not found', path: pathname });
+        return;
+      }
+
+      if (pathname === '/api/entities' && method === 'GET') {
+        const caseRef = resolveCaseRef(
+          req.headers,
+          undefined,
+          url.searchParams.get('case') || undefined,
+        );
+        const acl = assertCaseAcl(reqAuth(req).operator, caseRef);
+        if (!acl.ok) {
+          sendJson(res, acl.status, { error: acl.error, hint: acl.hint });
+          return;
+        }
+        const limit = Number(url.searchParams.get('limit') || 40);
+        const q = url.searchParams.get('q') || undefined;
+        sendJson(res, 200, {
+          entries: await listEntityIndex({ caseRef: caseRef || undefined, limit, q }),
+        });
+        return;
+      }
+
+      if (pathname.startsWith('/api/entities/') && method === 'GET') {
+        const entityId = pathname.slice('/api/entities/'.length);
+        const caseRef = resolveCaseRef(
+          req.headers,
+          undefined,
+          url.searchParams.get('case') || undefined,
+        );
+        if (!caseRef) {
+          sendJson(res, 401, { error: 'Case authorization required to read entities' });
+          return;
+        }
+        const acl = assertCaseAcl(reqAuth(req).operator, caseRef);
+        if (!acl.ok) {
+          sendJson(res, acl.status, { error: acl.error, hint: acl.hint });
+          return;
+        }
+        const entry = await getEntityIndex(caseRef, entityId);
+        if (!entry) {
+          sendJson(res, 404, { error: 'Entity not found' });
+          return;
+        }
+        sendJson(res, 200, entry);
+        return;
+      }
+
+      if (pathname === '/api/dossiers' && method === 'GET') {
+        const caseRef = resolveCaseRef(
+          req.headers,
+          undefined,
+          url.searchParams.get('case') || undefined,
+        );
+        const acl = assertCaseAcl(reqAuth(req).operator, caseRef);
+        if (!acl.ok) {
+          sendJson(res, acl.status, { error: acl.error, hint: acl.hint });
+          return;
+        }
+        const limit = Number(url.searchParams.get('limit') || 40);
+        sendJson(res, 200, {
+          entries: await listDossiers({ caseRef: caseRef || undefined, limit }),
+        });
+        return;
+      }
+
+      if (pathname.startsWith('/api/dossiers/') && method === 'GET') {
+        const id = pathname.slice('/api/dossiers/'.length);
+        const caseRef = resolveCaseRef(
+          req.headers,
+          undefined,
+          url.searchParams.get('case') || undefined,
+        );
+        if (!caseRef) {
+          sendJson(res, 401, { error: 'Case authorization required to read dossiers' });
+          return;
+        }
+        const acl = assertCaseAcl(reqAuth(req).operator, caseRef);
+        if (!acl.ok) {
+          sendJson(res, acl.status, { error: acl.error, hint: acl.hint });
+          return;
+        }
+        const entry = await readDossier(caseRef, id);
+        if (!entry) {
+          sendJson(res, 404, { error: 'Dossier not found' });
+          return;
+        }
+        sendJson(res, 200, entry);
+        return;
+      }
+
+      if (pathname === '/api/audit' && method === 'GET') {
+        const limit = Number(url.searchParams.get('limit') || 50);
+        const verify = url.searchParams.get('verify') === '1';
+        const entries = await listWhoAudit(limit);
+        sendJson(res, 200, {
+          entries,
+          ...(verify ? { verification: await verifyWhoAudit() } : {}),
+        });
+        return;
+      }
+
       if ((pathname === '/api/who' || pathname === '/api/who/text') && (method === 'GET' || method === 'POST')) {
         const body = method === 'POST' ? await readJsonBody(req) : {};
         const q =
@@ -459,6 +808,12 @@ export function createWhoApiHandler(opts: WhoHttpServerOptions = {}): WhoHandler
             error: 'Case authorization required',
             hint: 'Set OCROWLEY_OSINT_CASE, or send X-OCROWLEY-OSINT-CASE / body.case',
           });
+          return;
+        }
+        const { operator } = reqAuth(req);
+        const acl = assertCaseAcl(operator, caseRef);
+        if (!acl.ok) {
+          sendJson(res, acl.status, { error: acl.error, hint: acl.hint });
           return;
         }
 
@@ -540,7 +895,17 @@ export async function listenWhoServer(opts: WhoHttpServerOptions = {}): Promise<
   url: string;
   host: string;
   port: number;
+  bootstrapToken?: string;
 }> {
+  const { ensureWhoDataDir } = await import('./jobs/whoWorker.js');
+  ensureWhoDataDir();
+  await mergeEnvOperators();
+  let bootstrapToken: string | undefined;
+  if (operatorsRequired()) {
+    const boot = await ensureBootstrapOperator();
+    if (boot.created) bootstrapToken = boot.token;
+  }
+
   const host = opts.host || process.env.OCROWLEY_WHO_HOST || '127.0.0.1';
   const port = opts.port ?? Number(process.env.OCROWLEY_WHO_PORT || 8787);
   const server = createWhoServer(opts);
@@ -548,5 +913,5 @@ export async function listenWhoServer(opts: WhoHttpServerOptions = {}): Promise<
     server.once('error', reject);
     server.listen(port, host, () => resolve());
   });
-  return { server, host, port, url: `http://${host}:${port}` };
+  return { server, host, port, url: `http://${host}:${port}`, bootstrapToken };
 }
